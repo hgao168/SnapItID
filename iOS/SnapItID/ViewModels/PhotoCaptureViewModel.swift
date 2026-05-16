@@ -3,79 +3,153 @@ import SwiftUI
 import PhotosUI
 
 @MainActor
-class PhotoCaptureViewModel: NSObject, ObservableObject {
+final class PhotoCaptureViewModel: NSObject, ObservableObject {
+    // Inputs
     @Published var selectedPhoto: PhotosPickerItem?
     @Published var photoImage: UIImage?
-    @Published var selectedCountry: String = "US"
+    @Published var selectedCountry: String = "US" {
+        didSet { Task { await loadRules() } }
+    }
     @Published var selectedDocumentType: DocumentType = .passport
-    @Published var isProcessing: Bool = false
+
+    // Loaded country rules
+    @Published var rules: CountryRules?
+
+    // Operation state
+    @Published var isCheckingCompliance: Bool = false
+    @Published var isEnhancing: Bool = false
     @Published var errorMessage: String?
+    @Published var statusMessage: String?
+
+    // Outputs
     @Published var complianceResult: ComplianceResult?
-    
-    private let cloudflareService = CloudflareService.shared
-    
+    @Published var enhancedImage: UIImage?
+    @Published var enhancedModelName: String?
+
+    private let api = SnapItIDAPI.shared
+
     override init() {
         super.init()
+        Task { await loadRules() }
     }
-    
-    // MARK: - Photo Selection
+
+    // MARK: - Rules
+
+    func loadRules() async {
+        do {
+            let r = try await api.fetchRules(countryCode: selectedCountry)
+            self.rules = r
+        } catch {
+            self.rules = nil
+            self.errorMessage = "Could not load \(selectedCountry) rules: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Photo picker
+
     func handlePhotoSelection() {
         Task {
             do {
-                if let data = try await selectedPhoto?.loadTransferable(type: Data.self) {
-                    self.photoImage = UIImage(data: data)
+                if let data = try await selectedPhoto?.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    self.photoImage = img
+                    self.enhancedImage = nil
+                    self.complianceResult = nil
+                    self.errorMessage = nil
                 }
             } catch {
                 self.errorMessage = "Failed to load photo: \(error.localizedDescription)"
             }
         }
     }
-    
-    // MARK: - Upload and Check Compliance
-    func submitPhoto() {
-        guard let photoImage = photoImage else {
-            errorMessage = "No photo selected"
+
+    // MARK: - Compliance
+
+    func runComplianceCheck() {
+        guard let source = enhancedImage ?? photoImage else {
+            errorMessage = "Select a photo first."
             return
         }
-        
-        guard let photoData = photoImage.jpegData(compressionQuality: 0.8) else {
-            errorMessage = "Failed to compress photo"
-            return
-        }
-        
         Task {
-            isProcessing = true
-            defer { isProcessing = false }
-            
+            isCheckingCompliance = true
+            defer { isCheckingCompliance = false }
+            errorMessage = nil
+            statusMessage = "Running ICAO compliance check…"
             do {
-                // Step 1: Upload photo to Cloudflare
-                let metadata = [
-                    "country": selectedCountry,
-                    "documentType": selectedDocumentType.rawValue,
-                    "timestamp": ISO8601DateFormatter().string(from: Date())
-                ]
-                
-                let photoID = try await cloudflareService.uploadPhoto(photoData, metadata: metadata)
-                
-                // Step 2: Run compliance check
-                let result = try await cloudflareService.checkCompliance(
-                    photoID: photoID,
+                let result = try await api.checkCompliance(
+                    image: source,
                     countryCode: selectedCountry,
-                    documentType: selectedDocumentType.rawValue
+                    documentType: selectedDocumentType,
+                    rules: rules
                 )
-                
                 self.complianceResult = result
+                self.statusMessage = "Compliance check complete."
             } catch {
-                self.errorMessage = error.localizedDescription
+                self.errorMessage = "Compliance check failed: \(error.localizedDescription)"
+                self.statusMessage = nil
             }
         }
     }
-    
+
+    // MARK: - AI Enhance
+
+    func runEnhance() {
+        guard let source = photoImage else {
+            errorMessage = "Select a photo first."
+            return
+        }
+        Task {
+            isEnhancing = true
+            defer { isEnhancing = false }
+            errorMessage = nil
+            statusMessage = "AI Enhance running — replacing background and removing forbidden items…"
+            do {
+                let result = try await api.enhance(
+                    image: source,
+                    countryCode: selectedCountry,
+                    documentType: selectedDocumentType,
+                    rules: rules
+                )
+                guard let img = result.image else {
+                    throw APIError.encoding("AI returned no image")
+                }
+                self.enhancedImage = img
+                self.enhancedModelName = result.model
+                self.statusMessage = "AI enhancement complete (\(result.model))."
+                self.complianceResult = nil
+            } catch {
+                self.errorMessage = "AI Enhance failed: \(error.localizedDescription)"
+                self.statusMessage = nil
+            }
+        }
+    }
+
+    // MARK: - Save to Photos
+
+    func saveResultToPhotos() {
+        guard let img = enhancedImage ?? photoImage else {
+            errorMessage = "Nothing to save yet."
+            return
+        }
+        Task {
+            do {
+                try await PhotoSaver.save(img)
+                statusMessage = "Saved to Photos."
+            } catch {
+                errorMessage = "Save failed: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Reset
+
     func reset() {
         photoImage = nil
         selectedPhoto = nil
         complianceResult = nil
+        enhancedImage = nil
+        enhancedModelName = nil
         errorMessage = nil
+        statusMessage = nil
     }
 }

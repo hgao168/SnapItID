@@ -1,0 +1,48 @@
+<!-- pages/examples/examples.wxml -->
+<view class="page">
+
+  <view class="section-hero">
+    <text class="eyebrow">Real example</text>
+    <text class="section-title">From phone selfie to compliant passport photo.</text>
+    <text class="section-sub">A real AI Enhance result: glasses removed, white background, head reframed to ICAO proportions — face kept 100% identical.</text>
+  </view>
+
+  <view class="examples-grid">
+    <!-- Before -->
+    <view class="example-card">
+      <view class="example-tag tag-before">BEFORE</view>
+      <image class="example-img" src="https://snapitid.ai/examples/beforeImage.png"
+             mode="aspectFill" lazy-load="true"></image>
+      <text class="example-caption">Selfie. Glasses on. Dim indoor lighting. Cluttered background.</text>
+    </view>
+
+    <!-- After -->
+    <view class="example-card">
+      <view class="example-tag tag-after">AFTER</view>
+      <image class="example-img" src="https://snapitid.ai/examples/SnapItID.png"
+             mode="aspectFill" lazy-load="true"></image>
+      <text class="example-caption">Glasses removed, pure-white background, 35 × 45 mm @ 300 DPI.</text>
+    </view>
+  </view>
+
+  <view class="cta-block">
+    <text class="cta-text">Ready to create your compliant photo?</text>
+    <button class="btn btn-primary cta-btn" bindtap="goStudio">Open Studio →</button>
+  </view>
+
+  <!-- What AI Enhance does -->
+  <view class="card detail-card">
+    <text class="detail-title">What AI Enhance does</text>
+    <view class="detail-list">
+      <view class="detail-item" wx:for="{{features}}" wx:key="index">
+        <text class="detail-icon">{{item.icon}}</text>
+        <view>
+          <text class="detail-name">{{item.name}}</text>
+          <text class="detail-desc muted">{{item.desc}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view style="height:40rpx"></view>
+</view>

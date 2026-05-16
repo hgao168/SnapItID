@@ -1,0 +1,58 @@
+<!-- pages/result/result.wxml -->
+<!-- Full-screen compliance report, reachable via wx.navigateTo from studio -->
+<view class="page">
+  <view class="header">
+    <text class="header-title">Compliance Report</text>
+    <view class="pill {{result.isCompliant ? 'pill-ok' : 'pill-err'}}" wx:if="{{result}}">
+      {{result.isCompliant ? '✓ PASS' : '✗ ATTENTION'}}
+    </view>
+  </view>
+
+  <view wx:if="{{result}}" class="body">
+    <!-- Score -->
+    <view class="card score-card">
+      <view class="score-row">
+        <text class="score-label">Compliance score</text>
+        <text class="score-big {{scoreColor}}">{{result.complianceScore}}<text class="score-denom">/100</text></text>
+      </view>
+      <view class="score-bar-track">
+        <view class="score-bar-fill {{scoreColor}}" style="width:{{result.complianceScore}}%"></view>
+      </view>
+      <view class="meta-row">
+        <view class="pill {{confidenceClass}}">Confidence: {{confidenceLabel}}</view>
+        <view class="pill">{{result.issues.length}} issue(s)</view>
+        <view class="pill">{{result.processingTime}}s</view>
+      </view>
+    </view>
+
+    <!-- Issues -->
+    <view class="card" wx:if="{{result.issues.length > 0}}">
+      <text class="section-h">Issues found</text>
+      <view class="issue-item {{item.severity === 'CRITICAL' ? 'issue-critical' : item.severity === 'WARNING' ? 'issue-warn' : 'issue-info'}}"
+            wx:for="{{result.issues}}" wx:key="index">
+        <text class="issue-icon">{{item.severity === 'CRITICAL' ? '✗' : item.severity === 'WARNING' ? '⚠' : 'ℹ'}}</text>
+        <view>
+          <text class="issue-desc">{{item.description}}</text>
+          <text class="issue-suggest" wx:if="{{item.suggestion}}">{{item.suggestion}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Recommendations -->
+    <view class="card" wx:if="{{result.recommendations && result.recommendations.length}}">
+      <text class="section-h">Recommendations</text>
+      <view class="rec-item" wx:for="{{result.recommendations}}" wx:key="index">
+        <text>💡 {{item}}</text>
+      </view>
+    </view>
+
+    <button class="btn btn-primary mt24" bindtap="onBack">← Back to Studio</button>
+  </view>
+
+  <view wx:else class="empty-state">
+    <text class="muted">No result to display.</text>
+    <button class="btn btn-ghost mt24" bindtap="onBack">← Back to Studio</button>
+  </view>
+
+  <view style="height:40rpx"></view>
+</view>

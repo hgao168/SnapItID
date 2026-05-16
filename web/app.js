@@ -24,8 +24,11 @@ const els = {
   outputMeta: document.getElementById("outputMeta"),
   zoom: document.getElementById("zoomRange"),
   offsetY: document.getElementById("offsetY"),
+  offsetX: document.getElementById("offsetX"),
   bgColor: document.getElementById("bgColor"),
   processBtn: document.getElementById("processBtn"),
+  enhanceBtn: document.getElementById("enhanceBtn"),
+  enhanceHint: document.getElementById("enhanceHint"),
   checkBtn: document.getElementById("checkBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
   status: document.getElementById("statusLine"),
@@ -43,6 +46,43 @@ const state = {
   apiBase: null,         // the API base that responded successfully
   lastProcessedDataURL: null,
 };
+
+let listenersBound = false;
+
+// Debug helper
+function debugVideoElement() {
+  const v = els.video;
+  console.log("=== VIDEO ELEMENT DEBUG ===");
+  console.log("Element exists:", !!v);
+  if (v) {
+    console.log("Element id:", v.id);
+    console.log("Visible:", v.offsetHeight > 0 && v.offsetWidth > 0);
+    console.log("Display:", window.getComputedStyle(v).display);
+    console.log("Width:", v.offsetWidth, "Height:", v.offsetHeight);
+    console.log("Has autoplay:", v.autoplay);
+    console.log("Has muted:", v.muted);
+    console.log("Has playsinline:", v.hasAttribute("playsinline"));
+    console.log("srcObject:", v.srcObject);
+    console.log("readyState:", v.readyState, "(0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA)");
+    console.log("networkState:", v.networkState, "(0=NETWORK_EMPTY, 1=NETWORK_IDLE, 2=NETWORK_LOADING, 3=NETWORK_NO_SOURCE)");
+  }
+}
+
+// Enumerate available cameras
+async function listCameras() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+    console.log("=== CAMERAS FOUND ===");
+    cameras.forEach((cam, i) => {
+      console.log(`Camera ${i}: ${cam.label || "(unnamed)"} - ID: ${cam.deviceId}`);
+    });
+    return cameras;
+  } catch (err) {
+    console.error("Failed to enumerate cameras:", err);
+    return [];
+  }
+}
 
 const BG_PRESETS = {
   WHITE: "#ffffff",
@@ -150,6 +190,188 @@ const LOCAL_COUNTRY_RULES = {
     printFormat: "4x6",
     lastUpdated: "local-fallback",
   },
+  CN: {
+    id: "cn_rules",
+    countryCode: "CN",
+    countryName: "China",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  IT: {
+    id: "it_rules",
+    countryCode: "IT",
+    countryName: "Italy",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 37, height: 46, headHeight: 294 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  ES: {
+    id: "es_rules",
+    countryCode: "ES",
+    countryName: "Spain",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 37, height: 46, headHeight: 294 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  NL: {
+    id: "nl_rules",
+    countryCode: "NL",
+    countryName: "Netherlands",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 37, height: 46, headHeight: 294 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  SE: {
+    id: "se_rules",
+    countryCode: "SE",
+    countryName: "Sweden",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 37, height: 46, headHeight: 294 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  PL: {
+    id: "pl_rules",
+    countryCode: "PL",
+    countryName: "Poland",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 37, height: 46, headHeight: 294 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  IN: {
+    id: "in_rules",
+    countryCode: "IN",
+    countryName: "India",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  SG: {
+    id: "sg_rules",
+    countryCode: "SG",
+    countryName: "Singapore",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  TH: {
+    id: "th_rules",
+    countryCode: "TH",
+    countryName: "Thailand",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  VN: {
+    id: "vn_rules",
+    countryCode: "VN",
+    countryName: "Vietnam",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  ID: {
+    id: "id_rules",
+    countryCode: "ID",
+    countryName: "Indonesia",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  PH: {
+    id: "ph_rules",
+    countryCode: "PH",
+    countryName: "Philippines",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
+  MY: {
+    id: "my_rules",
+    countryCode: "MY",
+    countryName: "Malaysia",
+    passportSize: { width: 35, height: 45, headHeight: 288 },
+    visaSize: { width: 35, height: 45, headHeight: 288 },
+    backgroundColorRequirement: "WHITE",
+    smileAllowed: false,
+    glassesAllowed: false,
+    headCoverageAllowed: false,
+    minResolution: 3,
+    printFormat: "4x6",
+    lastUpdated: "local-fallback",
+  },
 };
 
 /* ---------- helpers ---------- */
@@ -170,21 +392,17 @@ function mmToPx(mm) {
 function buildApiBaseCandidates() {
   const list = [];
 
-  // Prefer same-origin API path, which matches deployed site routing.
+  // Primary API host — Cloudflare Workers routed on api.snapitid.ai/*
+  list.push("https://api.snapitid.ai");
+
+  // Same-origin (works on previews if Pages Functions proxy is set up).
   if (window.location && window.location.origin) {
     list.push(window.location.origin);
   }
 
-  // When running locally (file:// or localhost), use the production site API path.
-  const isLocalHost =
-    window.location &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-  if ((window.location && window.location.protocol === "file:") || isLocalHost) {
-    list.push("https://snapitid.ai");
-  }
-
-  // Keep legacy direct API host as a fallback for environments where it is configured.
-  list.push("https://api.snapitid.ai");
+  // Stable production domains as additional fallbacks.
+  list.push("https://snapitid.ai");
+  list.push("https://www.snapitid.ai");
 
   return [...new Set(list)];
 }
@@ -196,6 +414,47 @@ function unwrapApiResult(payload) {
   }
   // Backward-compatible fallback for already-unwrapped responses.
   return payload;
+}
+
+function normalizeRules(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const normalized = {
+    ...raw,
+    countryCode: raw.countryCode || raw.country_code || null,
+    countryName: raw.countryName || raw.country_name || null,
+    passportSize: raw.passportSize || raw.passport_size || null,
+    visaSize: raw.visaSize || raw.visa_size || null,
+    backgroundColorRequirement:
+      raw.backgroundColorRequirement ||
+      raw.background_color_requirement ||
+      raw.background ||
+      "WHITE",
+    smileAllowed:
+      typeof raw.smileAllowed === "boolean"
+        ? raw.smileAllowed
+        : typeof raw.smile_allowed === "boolean"
+          ? raw.smile_allowed
+          : false,
+    glassesAllowed:
+      typeof raw.glassesAllowed === "boolean"
+        ? raw.glassesAllowed
+        : typeof raw.glasses_allowed === "boolean"
+          ? raw.glasses_allowed
+          : false,
+    headCoverageAllowed:
+      typeof raw.headCoverageAllowed === "boolean"
+        ? raw.headCoverageAllowed
+        : typeof raw.head_coverage_allowed === "boolean"
+          ? raw.head_coverage_allowed
+          : false,
+  };
+
+  if (!normalized.countryName || !normalized.passportSize || !normalized.visaSize) {
+    return null;
+  }
+
+  return normalized;
 }
 
 async function fetchJSON(url, options) {
@@ -252,7 +511,11 @@ async function loadRules() {
   for (const base of API_BASE_CANDIDATES) {
     try {
       const payload = await fetchJSON(`${base}/api/rules/${code}`);
-      state.rules = unwrapApiResult(payload);
+      const normalized = normalizeRules(unwrapApiResult(payload));
+      if (!normalized) {
+        throw new Error("Rules API returned an unexpected payload shape");
+      }
+      state.rules = normalized;
       state.apiBase = base;
       updateEndpointInfo();
       renderRules();
@@ -274,7 +537,7 @@ async function loadRules() {
       <div>Size: <strong>${activeSize().width} × ${activeSize().height} mm</strong> (${mmToPx(activeSize().width)} × ${mmToPx(activeSize().height)} px @ ${DPI} DPI)</div>
       <div>Background: <strong>${state.rules.backgroundColorRequirement.replace("_", " ")}</strong></div>
     `;
-    setStatus("Using built-in country rules because the API is unreachable.", "ok");
+    setStatus("Using built-in country rules. You can still process and download photos.", "ok");
     return;
   }
 
@@ -286,7 +549,7 @@ function updateEndpointInfo(err) {
   if (state.apiBase) {
     els.endpointInfo.textContent = `API endpoint: ${state.apiBase}`;
   } else {
-    els.endpointInfo.textContent = `API unreachable${err ? " — " + err.message : ""}`;
+    els.endpointInfo.textContent = "Using local country rules. AI compliance check is temporarily unavailable.";
   }
 }
 
@@ -311,6 +574,11 @@ async function runComplianceCheck() {
       countryCode: els.country.value,
       documentType: els.doc.value,
       imageBase64: state.lastProcessedDataURL, // data URL; worker can parse
+      rules: state.rules ? {
+        glassesAllowed: state.rules.glassesAllowed,
+        smileAllowed: state.rules.smileAllowed,
+        headCoverageAllowed: state.rules.headCoverageAllowed,
+      } : undefined,
     };
     const response = await fetchJSON(`${state.apiBase}/api/compliance/check`, {
       method: "POST",
@@ -328,6 +596,112 @@ async function runComplianceCheck() {
   }
 }
 
+/* ---------- AI photo enhancement ---------- */
+async function runAIEnhance() {
+  if (!state.lastProcessedDataURL) {
+    setStatus("Process a photo first.", "err");
+    return;
+  }
+  if (!state.apiBase) {
+    setStatus("API endpoint unavailable — cannot run AI enhancement.", "err");
+    return;
+  }
+
+  els.enhanceBtn.disabled = true;
+  if (els.checkBtn) els.checkBtn.disabled = true;
+  setStatus("Enhancing photo with AI… this can take 10–30 seconds.");
+
+  try {
+    const payload = {
+      countryCode: els.country.value,
+      documentType: els.doc.value,
+      imageBase64: state.lastProcessedDataURL,
+      rules: state.rules ? {
+        glassesAllowed: state.rules.glassesAllowed,
+        smileAllowed: state.rules.smileAllowed,
+        headCoverageAllowed: state.rules.headCoverageAllowed,
+      } : undefined,
+    };
+    const response = await fetchJSON(`${state.apiBase}/api/compliance/enhance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = unwrapApiResult(response);
+    const dataUrl = result && result.imageBase64;
+    const modelName = result && typeof result.model === "string" ? result.model : "AI model";
+    if (!dataUrl) throw new Error("AI returned no image");
+
+    // Load enhanced image into a temporary <img>, then redraw to the output canvas
+    // at the correct passport/visa dimensions so download keeps proper sizing.
+    const img = await loadImage(dataUrl);
+    const size = activeSize();
+    const outW = mmToPx(size.width);
+    const outH = mmToPx(size.height);
+    const canvas = els.outputCanvas;
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d");
+    // Apply the same head/crown framing math used by the main processor.
+    const bounds = {
+      top: 0,
+      bottom: img.height - 1,
+      left: 0,
+      right: img.width - 1,
+      width: img.width,
+      height: img.height,
+    };
+    const estHeadHeight = bounds.height * 0.32;
+    // ICAO-style framing: head occupies ~72% of the frame height with the
+    // crown about 5% down from the top edge.
+    const desiredHeadFraction = 0.72;
+    const baseScale = (outH * desiredHeadFraction) / estHeadHeight;
+    const userZoom = parseFloat(els.zoom ? els.zoom.value : "1");
+    // Ensure the image always fully covers the canvas (no blank strips) by
+    // taking the larger of the head-framing scale and a cover-fit scale.
+    const coverScale = Math.max(outW / img.width, outH / img.height);
+    const scale = Math.max(baseScale * userZoom, coverScale);
+    const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
+    const offsetYFrac = parseFloat(els.offsetY ? els.offsetY.value : "0");
+    const crownTargetY = outH * (0.05 + offsetYFrac);
+    const personCenterX = (bounds.left + bounds.right) / 2;
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    let dx = outW / 2 - personCenterX * scale + outW * offsetXFrac;
+    let dy = crownTargetY - bounds.top * scale;
+    // Clamp so the image never leaves a blank strip on any edge.
+    if (dx > 0) dx = 0;
+    if (dx + dw < outW) dx = outW - dw;
+    if (dy > 0) dy = 0;
+    if (dy + dh < outH) dy = outH - dh;
+    ctx.fillStyle = activeBackgroundColor();
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.drawImage(img, dx, dy, dw, dh);
+
+    state.lastProcessedDataURL = canvas.toDataURL("image/jpeg", 0.95);
+    els.outputMeta.textContent =
+      `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI · enhanced by ${modelName}`;
+    canvas.parentElement.classList.add("has-content");
+    setStatus(`AI enhancement complete (${modelName}). Review and download.`, "ok");
+  } catch (err) {
+    console.error(err);
+    setStatus("AI enhancement failed: " + err.message, "err");
+  } finally {
+    els.enhanceBtn.disabled = false;
+    if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Failed to load enhanced image"));
+    img.src = src;
+  });
+}
+
 function renderComplianceResult(result) {
   if (!result) {
     els.complianceReport.hidden = true;
@@ -338,6 +712,39 @@ function renderComplianceResult(result) {
   const issues = Array.isArray(result.issues) ? result.issues : [];
   const recs = Array.isArray(result.recommendations) ? result.recommendations : [];
 
+  // Estimate pass-rate from failed checks found in issues.
+  const TOTAL_CHECKS = 12;
+  const issueFailMap = {
+    face_missing: 1,
+    multi_face: 1,
+    not_forward: 1,
+    eyes_closed: 1,
+    expression: 1,
+    glare: 1,
+    head_cover: 1,
+    shadows: 1,
+    bg: 1,
+    head_size: 1,
+    sharpness: 1,
+    too_small: 1,
+  };
+  const aiServiceIssue = issues.some((i) => i && i.category === "AI_SERVICE");
+  const failedChecks = Math.min(
+    TOTAL_CHECKS,
+    issues.reduce((sum, i) => sum + (issueFailMap[i && i.id] || 0), 0)
+  );
+  const passedChecks = Math.max(0, TOTAL_CHECKS - failedChecks);
+  const passRate = aiServiceIssue
+    ? null
+    : Math.round((passedChecks / TOTAL_CHECKS) * 100);
+  const confidence = passRate === null
+    ? "LOW"
+    : passRate >= 90
+      ? "HIGH"
+      : passRate >= 75
+        ? "MEDIUM"
+        : "LOW";
+
   const issuesHtml = issues.length
     ? `<ul>${issues.map((i) => `<li><strong>${i.severity || "INFO"}</strong> · ${i.category || ""} — ${i.description || ""}</li>`).join("")}</ul>`
     : "<div>No issues detected.</div>";
@@ -346,7 +753,7 @@ function renderComplianceResult(result) {
     : "";
 
   els.complianceReport.innerHTML = `
-    <div><strong>AI Compliance:</strong> ${compliant ? "PASS" : "NEEDS WORK"}${score !== null ? ` · Score ${score}/100` : ""}</div>
+    <div><strong>AI Compliance:</strong> ${compliant ? "PASS" : "NEEDS WORK"}${score !== null ? ` · Score ${score}/100` : ""}${passRate !== null ? ` · Checks passed ${passRate}%` : ""} · Confidence ${confidence}</div>
     ${issuesHtml}
     ${recsHtml}
   `;
@@ -360,24 +767,35 @@ function activeSize() {
 
 function activeBackgroundColor() {
   if (!state.rules) return "#ffffff";
-  return BG_PRESETS[state.rules.backgroundColorRequirement] || "#ffffff";
+  const bgKey = state.rules.backgroundColorRequirement || "WHITE";
+  return BG_PRESETS[bgKey] || "#ffffff";
 }
 
 function renderRules() {
   const r = state.rules;
   if (!r) { els.rulesPanel.textContent = ""; return; }
   const size = activeSize();
-  const bg = r.backgroundColorRequirement;
+  const bg = r.backgroundColorRequirement || "WHITE";
   els.bgColor.value = activeBackgroundColor();
   els.bgColor.disabled = true;
-  els.bgColor.title = `Fixed by country rule: ${bg.replace("_", " ")}`;
+  const bgLabel = String(bg).replace(/_/g, " ");
+  els.bgColor.title = `Fixed by country rule: ${bgLabel}`;
 
   els.rulesPanel.innerHTML = `
     <div><strong>${r.countryName}</strong> · ${els.doc.value === "VISA" ? "Visa" : "Passport"}</div>
     <div>Size: <strong>${size.width} × ${size.height} mm</strong> (${mmToPx(size.width)} × ${mmToPx(size.height)} px @ ${DPI} DPI)</div>
-    <div>Background: <strong>${bg.replace("_", " ")}</strong></div>
+    <div>Background: <strong>${bgLabel}</strong></div>
     <div>Smile: <strong>${r.smileAllowed ? "allowed" : "not allowed"}</strong> · Glasses: <strong>${r.glassesAllowed ? "allowed" : "not allowed"}</strong> · Head cover: <strong>${r.headCoverageAllowed ? "allowed" : "not allowed"}</strong></div>
   `;
+  if (els.enhanceHint) {
+    const tips = [];
+    if (r.glassesAllowed === false) tips.push("remove your glasses");
+    if (r.headCoverageAllowed === false) tips.push("remove any head covering");
+    tips.push("replace the background with pure white");
+    els.enhanceHint.textContent =
+      `💡 ${r.countryName} forbids glasses${r.headCoverageAllowed === false ? " and head coverings" : ""} in ${els.doc.value === "VISA" ? "visa" : "passport"} photos. ` +
+      `Click "AI Enhance" to automatically ${tips.join(", ")} while keeping your face identical.`;
+  }
   resizeOutputCanvasToSpec();
 }
 
@@ -388,46 +806,243 @@ function resizeOutputCanvasToSpec() {
   els.outputCanvas.height = mmToPx(size.height);
 }
 
-/* ---------- tabs ---------- */
-els.tabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    els.tabs.forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
-    Object.values(els.panes).forEach((p) => p.classList.remove("active"));
-    els.panes[tab.dataset.tab].classList.add("active");
+function bind(el, event, handler) {
+  if (!el) {
+    console.warn(`Skipped binding '${event}' because target element is missing.`);
+    return false;
+  }
+  el.addEventListener(event, handler);
+  return true;
+}
+
+/* ---------- event listeners setup ---------- */
+function setupEventListeners() {
+  if (listenersBound) return;
+
+  if (!els.fileInput || !els.dropzone || !els.startCam || !els.capture || !els.stopCam) {
+    console.error("Critical UI elements are missing. Event listeners were not attached.");
+    setStatus("UI failed to initialize. Please refresh the page.", "err");
+    return;
+  }
+
+  /* ---------- tabs ---------- */
+  els.tabs.forEach((tab) => {
+    bind(tab, "click", () => {
+      els.tabs.forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      Object.values(els.panes).forEach((p) => p.classList.remove("active"));
+      els.panes[tab.dataset.tab].classList.add("active");
+    });
   });
-});
 
-/* ---------- upload ---------- */
-els.fileInput.addEventListener("change", (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (f) loadFromFile(f);
-});
+  /* ---------- upload ---------- */
+  bind(els.fileInput, "change", (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) loadFromFile(f);
+  });
 
-// Some browsers are inconsistent with hidden input + label activation.
-// Trigger file picker explicitly from the dropzone for reliability.
-els.dropzone.addEventListener("click", (e) => {
-  if (e.target !== els.fileInput) {
-    els.fileInput.click();
+  // NOTE: the dropzone is a <label for="fileInput">, which natively opens
+  // the file picker on click. Do NOT also call fileInput.click() here — that
+  // would open the dialog twice and require selecting the file twice.
+  bind(els.dropzone, "keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      els.fileInput.click();
+    }
+  });
+
+  ["dragenter", "dragover"].forEach((ev) =>
+    bind(els.dropzone, ev, (e) => { e.preventDefault(); els.dropzone.classList.add("dragover"); })
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    bind(els.dropzone, ev, (e) => { e.preventDefault(); els.dropzone.classList.remove("dragover"); })
+  );
+  bind(els.dropzone, "drop", (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFromFile(f);
+  });
+
+  /* ---------- camera ---------- */
+  bind(els.startCam, "click", async () => {
+    try {
+      console.log("\n=== START CAMERA CLICKED ===");
+      debugVideoElement();
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Camera requires HTTPS (or localhost) and browser media support");
+      }
+      
+      // First, check if the video element is even ready
+      if (!els.video) {
+        throw new Error("Video element (#videoPreview) not found in DOM");
+      }
+      
+      // List available cameras
+      const cameras = await listCameras();
+      if (cameras.length === 0) {
+        throw new Error("No camera devices found on this system");
+      }
+      
+      setStatus("Requesting camera access...", "");
+      console.log("Requesting camera with basic constraint...");
+      
+      // Start with the simplest possible constraint
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: { min: 320 } }, 
+          audio: false 
+        });
+        console.log("✓ Camera stream obtained with basic constraint");
+      } catch (err1) {
+        console.warn("Failed with width constraint:", err1.name, err1.message);
+        try {
+          console.log("Retrying with truly minimal constraint (video: true)...");
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          console.log("✓ Camera stream obtained with minimal constraint");
+        } catch (err2) {
+          console.error("Failed with minimal constraint:", err2.name, err2.message);
+          throw err2;
+        }
+      }
+      
+      if (!stream) {
+        throw new Error("getUserMedia returned null/undefined stream");
+      }
+      
+      // Get video tracks to verify
+      const videoTracks = stream.getVideoTracks();
+      console.log("Video tracks in stream:", videoTracks.length);
+      videoTracks.forEach((track, i) => {
+        console.log(`  Track ${i}: id=${track.id}, enabled=${track.enabled}, state=${track.readyState}`);
+      });
+      
+      if (videoTracks.length === 0) {
+        throw new Error("Stream has no video tracks");
+      }
+      
+      console.log("Assigning stream to video element...");
+      els.video.srcObject = stream;
+      state.cameraStream = stream;
+      
+      // Wait a bit for the video to be ready, then play
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log("Attempting to play video...");
+      try {
+        await els.video.play();
+        console.log("✓ Video is playing");
+      } catch (playErr) {
+        console.warn("Video.play() warning (might still work):", playErr);
+      }
+      
+      // Give it another moment to start rendering
+      await new Promise(resolve => setTimeout(resolve, 500));
+      debugVideoElement();
+      
+      els.startCam.disabled = true;
+      els.capture.disabled = false;
+      els.stopCam.disabled = false;
+      setStatus("✓ Camera live. Align your face and click Capture.", "ok");
+      console.log("=== CAMERA STARTED SUCCESSFULLY ===\n");
+      
+    } catch (err) {
+      console.error("=== CAMERA ERROR ===", err.name, err.message);
+      debugVideoElement();
+      
+      const insecure = location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1";
+      if (insecure) {
+        setStatus("Camera needs HTTPS or localhost. Open this page via https://snapitid.ai or run a local server, then allow camera permission.", "err");
+      } else {
+        let errMsg = "Camera failed: ";
+        if (err.name === "NotAllowedError") {
+          errMsg = "⚠️ Camera permission denied. Please check your browser permissions and try again.";
+        } else if (err.name === "NotFoundError") {
+          errMsg = "⚠️ No camera found on this device.";
+        } else if (err.name === "NotReadableError") {
+          errMsg = "⚠️ Camera is already in use by another app. Close that app and try again.";
+        } else if (err.name === "OverconstrainedError") {
+          errMsg = "⚠️ Camera doesn't support the requested resolution. Retrying with lower resolution...";
+        } else if (err.message.includes("Video element")) {
+          errMsg = "⚠️ Video element issue: " + err.message;
+        } else {
+          errMsg += err.name + ": " + err.message;
+        }
+        setStatus(errMsg, "err");
+      }
+    }
+  });
+
+  bind(els.capture, "click", () => {
+    if (!state.cameraStream) return;
+    const v = els.video;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    loadFromDataURL(c.toDataURL("image/jpeg", 0.95));
+  });
+
+  bind(els.stopCam, "click", () => {
+    if (state.cameraStream) state.cameraStream.getTracks().forEach((t) => t.stop());
+    state.cameraStream = null;
+    els.video.srcObject = null;
+    els.startCam.disabled = false;
+    els.capture.disabled = true;
+    els.stopCam.disabled = true;
+  });
+
+  bind(els.processBtn, "click", processPhoto);
+  bind(els.checkBtn, "click", runComplianceCheck);
+  bind(els.enhanceBtn, "click", runAIEnhance);
+
+  [els.zoom, els.offsetY, els.offsetX].forEach((c) =>
+    bind(c, "input", () => {
+      if (state.sourceImage) processPhoto();
+    })
+  );
+
+  bind(els.country, "change", () => {
+    loadRules().then(() => { if (state.sourceImage) processPhoto(); });
+  });
+  bind(els.doc, "change", () => {
+    renderRules();
+    if (state.sourceImage) processPhoto();
+  });
+
+  bind(els.bgColor, "change", () => {
+    // Keep the control locked to the country requirement.
+    if (state.rules) {
+      els.bgColor.value = activeBackgroundColor();
+    }
+  });
+
+  bind(els.downloadBtn, "click", () => {
+    const link = document.createElement("a");
+    const code = els.country.value.toLowerCase();
+    const doc = els.doc.value.toLowerCase();
+    link.download = `snapitid-${code}-${doc}.jpg`;
+    link.href = els.outputCanvas.toDataURL("image/jpeg", 0.95);
+    link.click();
+  });
+
+  listenersBound = true;
+}
+
+/* ---------- bootstrap ---------- */
+(async function init() {
+  if (location.protocol === "file:") {
+    setStatus("You are opening this page as a local file. Use https://snapitid.ai or http://localhost to enable API + camera.", "err");
   }
-});
-els.dropzone.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" || e.key === " ") {
-    e.preventDefault();
-    els.fileInput.click();
-  }
-});
 
-["dragenter", "dragover"].forEach((ev) =>
-  els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.add("dragover"); })
-);
-["dragleave", "drop"].forEach((ev) =>
-  els.dropzone.addEventListener(ev, (e) => { e.preventDefault(); els.dropzone.classList.remove("dragover"); })
-);
-els.dropzone.addEventListener("drop", (e) => {
-  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) loadFromFile(f);
-});
+  // Bind user interactions immediately so upload/camera controls work
+  // even if rules/model initialization is still in progress.
+  setupEventListeners();
+
+  resizeOutputCanvasToSpec();
+  await loadRules();
+  await initSegmenter();
+})();
 
 function loadFromFile(file) {
   if (!file.type.startsWith("image/")) {
@@ -454,50 +1069,6 @@ function loadFromDataURL(url) {
   img.onerror = () => setStatus("Could not load image.", "err");
   img.src = url;
 }
-
-/* ---------- camera ---------- */
-els.startCam.addEventListener("click", async () => {
-  try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("Camera requires HTTPS (or localhost) and browser media support");
-    }
-    state.cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } },
-      audio: false,
-    });
-    els.video.srcObject = state.cameraStream;
-    els.startCam.disabled = true;
-    els.capture.disabled = false;
-    els.stopCam.disabled = false;
-    setStatus("Camera live. Align your face and click Capture.", "ok");
-  } catch (err) {
-    const insecure = location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1";
-    if (insecure) {
-      setStatus("Camera needs HTTPS or localhost. Open this page via https://snapitid.ai or run a local server, then allow camera permission.", "err");
-    } else {
-      setStatus("Camera did not start. Check the browser camera permission icon, then click Start Camera again.", "err");
-    }
-  }
-});
-
-els.capture.addEventListener("click", () => {
-  if (!state.cameraStream) return;
-  const v = els.video;
-  const c = document.createElement("canvas");
-  c.width = v.videoWidth;
-  c.height = v.videoHeight;
-  c.getContext("2d").drawImage(v, 0, 0);
-  loadFromDataURL(c.toDataURL("image/jpeg", 0.95));
-});
-
-els.stopCam.addEventListener("click", () => {
-  if (state.cameraStream) state.cameraStream.getTracks().forEach((t) => t.stop());
-  state.cameraStream = null;
-  els.video.srcObject = null;
-  els.startCam.disabled = false;
-  els.capture.disabled = true;
-  els.stopCam.disabled = true;
-});
 
 /* ---------- processing ---------- */
 function imageToCanvas(img, maxDim) {
@@ -588,13 +1159,14 @@ async function processPhoto() {
     // Source point (in work coords) that will map to a fixed point in output
     // We want: crown (bounds.top) → output Y = outH * 0.10 (plus user offset)
     const offsetYFrac = parseFloat(els.offsetY.value);
+    const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
     const crownTargetY = outH * (0.10 + offsetYFrac);
     const personCenterX = (bounds.left + bounds.right) / 2;
 
     // Where to draw the work canvas on the output canvas
     const drawW = work.width * scale;
     const drawH = work.height * scale;
-    const drawX = outW / 2 - personCenterX * scale;
+    const drawX = outW / 2 - personCenterX * scale + outW * offsetXFrac;
     const drawY = crownTargetY - bounds.top * scale;
 
     // 1. Fill background
@@ -626,6 +1198,7 @@ async function processPhoto() {
     state.lastProcessedDataURL = outCanvas.toDataURL("image/jpeg", 0.95);
     els.downloadBtn.disabled = false;
     if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
+    if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase;
     setStatus(maskCanvas ? "Done. You can adjust zoom or download." : "Done (no background removal — model unavailable).", "ok");
   } catch (err) {
     console.error(err);
@@ -634,46 +1207,3 @@ async function processPhoto() {
     els.processBtn.disabled = false;
   }
 }
-
-els.processBtn.addEventListener("click", processPhoto);
-if (els.checkBtn) els.checkBtn.addEventListener("click", runComplianceCheck);
-
-[els.zoom, els.offsetY].forEach((c) =>
-  c.addEventListener("input", () => {
-    if (state.sourceImage) processPhoto();
-  })
-);
-
-els.country.addEventListener("change", () => {
-  loadRules().then(() => { if (state.sourceImage) processPhoto(); });
-});
-els.doc.addEventListener("change", () => {
-  renderRules();
-  if (state.sourceImage) processPhoto();
-});
-
-els.bgColor.addEventListener("change", () => {
-  // Keep the control locked to the country requirement.
-  if (state.rules) {
-    els.bgColor.value = activeBackgroundColor();
-  }
-});
-
-els.downloadBtn.addEventListener("click", () => {
-  const link = document.createElement("a");
-  const code = els.country.value.toLowerCase();
-  const doc = els.doc.value.toLowerCase();
-  link.download = `snapitid-${code}-${doc}.jpg`;
-  link.href = els.outputCanvas.toDataURL("image/jpeg", 0.95);
-  link.click();
-});
-
-/* ---------- bootstrap ---------- */
-(async function init() {
-  if (location.protocol === "file:") {
-    setStatus("You are opening this page as a local file. Use https://snapitid.ai or http://localhost to enable API + camera.", "err");
-  }
-  resizeOutputCanvasToSpec();
-  await loadRules();
-  await initSegmenter();
-})();

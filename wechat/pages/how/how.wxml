@@ -1,0 +1,45 @@
+<!-- pages/how/how.wxml -->
+<view class="page">
+
+  <view class="section-hero">
+    <text class="eyebrow">How it works</text>
+    <text class="section-title">Three steps. One compliant photo.</text>
+    <text class="section-sub">Your photo only leaves your device when you tap "Check Compliance" or "AI Enhance".</text>
+  </view>
+
+  <!-- Steps -->
+  <view class="steps-list">
+    <view class="how-card" wx:for="{{steps}}" wx:key="index">
+      <view class="how-num-badge">{{item.num}}</view>
+      <view class="how-body">
+        <text class="how-icon">{{item.icon}}</text>
+        <text class="how-title">{{item.title}}</text>
+        <text class="how-desc muted">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Features grid -->
+  <view class="features-section">
+    <view class="section-inner">
+      <text class="eyebrow">Features</text>
+      <text class="section-title">Built for accuracy and speed.</text>
+    </view>
+
+    <view class="feat-grid">
+      <view class="feat-card" wx:for="{{feats}}" wx:key="index">
+        <text class="feat-icon">{{item.icon}}</text>
+        <text class="feat-name">{{item.name}}</text>
+        <text class="feat-desc muted">{{item.desc}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- CTA -->
+  <view class="cta-block card">
+    <text class="cta-head">Ready to try it?</text>
+    <button class="btn btn-primary" bindtap="goStudio">Open Photo Studio →</button>
+  </view>
+
+  <view style="height:40rpx"></view>
+</view>

@@ -1,0 +1,103 @@
+/* app.wxss — global styles */
+page {
+  background-color: #0f0f0f;
+  color: #e8e8e8;
+  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+/* ---- cards ---- */
+.card {
+  background: #1a1a1a;
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(255,255,255,0.08);
+  padding: 32rpx;
+  margin: 0 24rpx 24rpx;
+}
+
+/* ---- section titles ---- */
+.eyebrow {
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 3rpx;
+  text-transform: uppercase;
+  color: #888;
+  display: block;
+  margin-bottom: 8rpx;
+}
+.section-title {
+  font-size: 42rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5rpx;
+}
+.section-sub {
+  font-size: 26rpx;
+  color: #888;
+  margin-top: 12rpx;
+}
+
+/* ---- buttons ---- */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  height: 88rpx;
+  border-radius: 14rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: none;
+  line-height: 1;
+}
+.btn::after { border: none; }
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+.btn-green {
+  background: #16a34a;
+  color: #dcfce7;
+}
+.btn-outline {
+  background: transparent;
+  color: #e8e8e8;
+  border: 2rpx solid rgba(255,255,255,0.2);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  color: #e8e8e8;
+}
+.btn[disabled], .btn-disabled {
+  opacity: 0.35;
+}
+
+/* ---- pill / badge ---- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6rpx 18rpx;
+  border-radius: 100rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  color: #aaa;
+}
+.pill-ok   { background: rgba(34,197,94,0.18); color: #86efac; }
+.pill-err  { background: rgba(239,68,68,0.18);  color: #fca5a5; }
+.pill-warn { background: rgba(251,191,36,0.18); color: #fde68a; }
+
+/* ---- muted text ---- */
+.muted { color: #666; }
+
+/* ---- divider ---- */
+.divider {
+  height: 1rpx;
+  background: rgba(255,255,255,0.07);
+  margin: 32rpx 0;
+}
+
+/* ---- flag icons (text fallback) ---- */
+.flag { font-size: 36rpx; }

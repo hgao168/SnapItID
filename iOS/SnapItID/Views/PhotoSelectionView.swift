@@ -4,47 +4,35 @@ import PhotosUI
 struct PhotoSelectionView: View {
     @ObservedObject var viewModel: PhotoCaptureViewModel
     @Binding var photoImage: UIImage?
+
     @State private var showCamera = false
     @State private var showPhotoPicker = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your Photo")
                 .font(.system(size: 16, weight: .semibold))
-            
-            if let photoImage = photoImage {
+
+            if let image = photoImage {
                 VStack(spacing: 12) {
-                    Image(uiImage: photoImage)
+                    Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: .infinity)
                         .frame(height: 300)
+                        .background(Color(.systemGray6))
                         .cornerRadius(12)
-                        .clipped()
-                    
+
                     HStack(spacing: 12) {
-                        Button(action: { showCamera = true }) {
-                            Label("Retake", systemImage: "camera.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .foregroundStyle(.blue)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue, lineWidth: 1.5)
-                                )
+                        actionButton(title: "Retake", systemImage: "camera.fill", filled: false) {
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                showCamera = true
+                            } else {
+                                showPhotoPicker = true
+                            }
                         }
-                        
-                        Button(action: { showPhotoPicker = true }) {
-                            Label("Change", systemImage: "photo")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .foregroundStyle(.blue)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue, lineWidth: 1.5)
-                                )
+                        actionButton(title: "Change", systemImage: "photo", filled: false) {
+                            showPhotoPicker = true
                         }
                     }
                 }
@@ -54,41 +42,26 @@ struct PhotoSelectionView: View {
                         Image(systemName: "photo.badge.plus")
                             .font(.system(size: 40))
                             .foregroundStyle(.blue)
-                        
-                        Text("No photo selected")
-                            .font(.system(size: 14, weight: .semibold))
-                        
-                        Text("Upload a clear photo of your identity document")
+                        Text("No photo selected").font(.system(size: 14, weight: .semibold))
+                        Text("Take or upload a clear front-facing photo")
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(32)
+                    .padding(28)
                     .background(Color(.systemGray6))
                     .cornerRadius(12)
-                    
+
                     HStack(spacing: 12) {
-                        Button(action: { showCamera = true }) {
-                            Label("Take Photo", systemImage: "camera.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .foregroundStyle(.white)
-                                .background(Color.blue)
-                                .cornerRadius(8)
+                        actionButton(title: "Take Photo", systemImage: "camera.fill", filled: true) {
+                            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                                showCamera = true
+                            } else {
+                                showPhotoPicker = true
+                            }
                         }
-                        
-                        Button(action: { showPhotoPicker = true }) {
-                            Label("Choose", systemImage: "photo")
-                                .font(.system(size: 14, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .foregroundStyle(.blue)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue, lineWidth: 1.5)
-                                )
+                        actionButton(title: "Choose", systemImage: "photo", filled: false) {
+                            showPhotoPicker = true
                         }
                     }
                 }
@@ -96,14 +69,38 @@ struct PhotoSelectionView: View {
         }
         .padding(.horizontal, 24)
         .photosPicker(isPresented: $showPhotoPicker, selection: $viewModel.selectedPhoto, matching: .images)
-        .onChange(of: viewModel.selectedPhoto) { oldValue, newValue in
-            if newValue != nil {
-                viewModel.handlePhotoSelection()
-            }
+        .onChange(of: viewModel.selectedPhoto) { _, newValue in
+            if newValue != nil { viewModel.handlePhotoSelection() }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker(image: Binding(
+                get: { viewModel.photoImage },
+                set: { newImage in
+                    viewModel.photoImage = newImage
+                    if newImage != nil {
+                        viewModel.complianceResult = nil
+                        viewModel.enhancedImage = nil
+                    }
+                }
+            ))
+            .ignoresSafeArea()
         }
     }
-}
 
-#Preview {
-    PhotoSelectionView(viewModel: PhotoCaptureViewModel(), photoImage: .constant(nil))
+    @ViewBuilder
+    private func actionButton(title: String, systemImage: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .foregroundStyle(filled ? Color.white : Color.blue)
+                .background(filled ? Color.blue : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.blue, lineWidth: filled ? 0 : 1.5)
+                )
+                .cornerRadius(8)
+        }
+    }
 }

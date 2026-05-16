@@ -3,175 +3,137 @@ import SwiftUI
 struct ComplianceResultView: View {
     let result: ComplianceResult
     let onDismiss: () -> Void
-    
-    var statusColor: Color {
-        result.isCompliant ? .green : .red
+
+    private var statusColor: Color { result.isCompliant ? .green : .red }
+    private var statusText: String { result.isCompliant ? "PASS" : "ATTENTION NEEDED" }
+
+    private var scoreColor: Color {
+        if result.complianceScore >= 90 { return .green }
+        if result.complianceScore >= 75 { return .orange }
+        return .red
     }
-    
-    var statusText: String {
-        result.isCompliant ? "Compliant" : "Not Compliant"
-    }
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Header
+        VStack(alignment: .leading, spacing: 16) {
+            // Summary card
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
+                HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Compliance Check Result")
-                            .font(.system(size: 18, weight: .semibold))
-                        
+                        Text("Compliance result").font(.system(size: 16, weight: .semibold))
                         Text("Processed in \(String(format: "%.2f", result.processingTime))s")
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
-                    
                     Spacer()
-                    
                     VStack(alignment: .trailing, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Image(systemName: result.isCompliant ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .font(.system(size: 20))
-                            
-                            Text(statusText)
-                                .font(.system(size: 16, weight: .semibold))
+                        HStack(spacing: 6) {
+                            Image(systemName: result.isCompliant ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                            Text(statusText).font(.system(size: 14, weight: .bold))
                         }
                         .foregroundStyle(statusColor)
-                        
-                        Text("\(Int(result.complianceScore))% score")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(.secondary)
+                        Text("Score \(Int(result.complianceScore))/100")
+                            .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 }
-                
-                // Score Bar
-                ProgressView(value: result.complianceScore / 100)
-                    .tint(result.complianceScore >= 80 ? .green : result.complianceScore >= 60 ? .orange : .red)
+
+                ProgressView(value: result.complianceScore / 100).tint(scoreColor)
+
+                HStack(spacing: 16) {
+                    pill("Confidence", result.confidenceLabel)
+                    pill("Issues", "\(result.issues.count)")
+                }
             }
-            .padding(16)
+            .padding(14)
             .background(Color(.systemGray6))
             .cornerRadius(12)
-            
+
             // Issues
             if !result.issues.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Issues Found (\(result.issues.count))")
-                        .font(.system(size: 14, weight: .semibold))
-                    
-                    VStack(spacing: 8) {
-                        ForEach(result.issues) { issue in
-                            IssueRowView(issue: issue)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Issues found").font(.system(size: 14, weight: .semibold))
+                    ForEach(result.issues) { IssueRowView(issue: $0) }
                 }
             }
-            
+
             // Recommendations
             if !result.recommendations.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Recommendations")
-                        .font(.system(size: 14, weight: .semibold))
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(result.recommendations, id: \.self) { rec in
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: "lightbulb.fill")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.blue)
-                                    .padding(.top, 2)
-                                
-                                Text(rec)
-                                    .font(.system(size: 13, weight: .regular))
-                                    .lineLimit(3)
-                            }
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recommendations").font(.system(size: 14, weight: .semibold))
+                    ForEach(result.recommendations, id: \.self) { rec in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "lightbulb.fill")
+                                .foregroundStyle(.blue)
+                                .font(.system(size: 12))
+                                .padding(.top, 2)
+                            Text(rec).font(.system(size: 13))
                         }
                     }
                 }
             }
-            
-            // Action Button
+
             Button(action: onDismiss) {
-                Text("Try Again")
+                Text("Start over")
                     .font(.system(size: 16, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
+                    .frame(maxWidth: .infinity).frame(height: 48)
                     .background(Color.blue)
                     .foregroundStyle(.white)
-                    .cornerRadius(12)
+                    .cornerRadius(10)
             }
         }
-        .padding(20)
+        .padding(18)
         .background(Color(.systemBackground))
-        .border(Color(.systemGray3), width: 1)
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(.systemGray4), lineWidth: 1))
         .cornerRadius(12)
         .padding(.horizontal, 24)
+    }
+
+    @ViewBuilder
+    private func pill(_ key: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(key).font(.system(size: 11)).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 11, weight: .bold))
+        }
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        .background(Color(.systemBackground))
+        .overlay(Capsule().stroke(Color(.systemGray4), lineWidth: 1))
+        .clipShape(Capsule())
     }
 }
 
 struct IssueRowView: View {
     let issue: ComplianceIssue
-    
-    var severityColor: Color {
+
+    private var severityColor: Color {
         switch issue.severity {
         case .critical: return .red
-        case .warning: return .orange
-        case .info: return .blue
+        case .warning:  return .orange
+        case .info:     return .blue
         }
     }
-    
-    var severityIcon: String {
+    private var severityIcon: String {
         switch issue.severity {
         case .critical: return "xmark.circle.fill"
-        case .warning: return "exclamationmark.circle.fill"
-        case .info: return "info.circle.fill"
+        case .warning:  return "exclamationmark.triangle.fill"
+        case .info:     return "info.circle.fill"
         }
     }
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: severityIcon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(severityColor)
-                    .padding(.top, 2)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(issue.description)
-                        .font(.system(size: 13, weight: .semibold))
-                    
-                    if let suggestion = issue.suggestion {
-                        Text(suggestion)
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: severityIcon)
+                .foregroundStyle(severityColor)
+                .font(.system(size: 14))
+                .padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(issue.description).font(.system(size: 13, weight: .semibold))
+                if let s = issue.suggestion, !s.isEmpty {
+                    Text(s).font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
         }
-        .padding(12)
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray6))
         .cornerRadius(8)
     }
-}
-
-#Preview {
-    let mockResult = ComplianceResult(
-        id: "test",
-        isCompliant: false,
-        complianceScore: 75,
-        issues: [
-            ComplianceIssue(
-                id: "1",
-                severity: .warning,
-                category: .headSize,
-                description: "Head size is 8% too small",
-                suggestion: "Move closer to camera"
-            )
-        ],
-        recommendations: ["Ensure proper lighting", "Face camera directly"],
-        processingTime: 2.5,
-        timestamp: Date()
-    )
-    
-    ComplianceResultView(result: mockResult, onDismiss: {})
 }

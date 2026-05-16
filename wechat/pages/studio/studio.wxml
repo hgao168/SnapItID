@@ -1,0 +1,185 @@
+<!-- pages/studio/studio.wxml -->
+<view class="page">
+
+  <!-- Hero -->
+  <view class="hero">
+    <text class="hero-brand">SnapItID<text class="brand-dot">.ai</text></text>
+    <text class="hero-sub">Compliant passport & visa photos · AI-enhanced</text>
+    <view class="hero-stats">
+      <view class="stat"><text class="stat-n">20+</text><text class="stat-l">Countries</text></view>
+      <view class="stat"><text class="stat-n">AI</text><text class="stat-l">Background</text></view>
+      <view class="stat"><text class="stat-n">300</text><text class="stat-l">DPI</text></view>
+      <view class="stat"><text class="stat-n">&lt;1m</text><text class="stat-l">Turnaround</text></view>
+    </view>
+  </view>
+
+  <!-- STEP 1 — Country & Document -->
+  <view class="card step-card">
+    <view class="step-head">
+      <view class="step-num"><text>01</text></view>
+      <text class="step-title">Country & Document</text>
+    </view>
+
+    <view class="field-row">
+      <view class="field">
+        <text class="field-label">Country</text>
+        <picker mode="selector" range="{{countryLabels}}" value="{{countryIdx}}" bindchange="onCountryChange">
+          <view class="picker-val">{{countryLabels[countryIdx]}} ▾</view>
+        </picker>
+      </view>
+      <view class="field">
+        <text class="field-label">Document</text>
+        <picker mode="selector" range="{{docLabels}}" value="{{docIdx}}" bindchange="onDocChange">
+          <view class="picker-val">{{docLabels[docIdx]}} ▾</view>
+        </picker>
+      </view>
+    </view>
+
+    <!-- Rules panel -->
+    <view class="rules-panel" wx:if="{{rules}}">
+      <view class="rules-row">
+        <text class="rules-key">Country</text>
+        <text class="rules-val">{{rules.countryName}}</text>
+      </view>
+      <view class="rules-row">
+        <text class="rules-key">Size</text>
+        <text class="rules-val">{{currentSize.width}} × {{currentSize.height}} mm</text>
+      </view>
+      <view class="rules-row">
+        <text class="rules-key">Background</text>
+        <text class="rules-val">{{bgLabel}}</text>
+      </view>
+      <view class="rules-row">
+        <text class="rules-key">Smile</text>
+        <text class="rules-val {{rules.smileAllowed ? 'ok' : 'no'}}">{{rules.smileAllowed ? 'Allowed' : 'Not allowed'}}</text>
+      </view>
+      <view class="rules-row">
+        <text class="rules-key">Glasses</text>
+        <text class="rules-val {{rules.glassesAllowed ? 'ok' : 'no'}}">{{rules.glassesAllowed ? 'Allowed' : 'Not allowed'}}</text>
+      </view>
+      <view class="rules-row">
+        <text class="rules-key">Head covering</text>
+        <text class="rules-val {{rules.headCoverageAllowed ? 'ok' : 'no'}}">{{rules.headCoverageAllowed ? 'Allowed' : 'Not allowed'}}</text>
+      </view>
+    </view>
+    <view class="rules-loading" wx:elif="{{rulesLoading}}">
+      <text class="muted">Loading country rules…</text>
+    </view>
+  </view>
+
+  <!-- STEP 2 — Photo -->
+  <view class="card step-card">
+    <view class="step-head">
+      <view class="step-num"><text>02</text></view>
+      <text class="step-title">Your Photo</text>
+    </view>
+
+    <!-- Empty state -->
+    <view class="drop-zone" wx:if="{{!sourceImage}}" bindtap="onChoosePhoto">
+      <text class="dz-icon">📷</text>
+      <text class="dz-main">Tap to choose or take a photo</text>
+      <text class="dz-sub">JPG / PNG · face centered · well lit</text>
+    </view>
+
+    <!-- Preview -->
+    <view wx:else>
+      <image class="source-preview" src="{{sourceImage}}" mode="aspectFit"></image>
+      <view class="photo-actions">
+        <button class="btn btn-ghost btn-sm" bindtap="onChoosePhoto">Retake / Change</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- Enhance hint (country-aware) -->
+  <view class="enhance-hint" wx:if="{{enhanceHint && sourceImage}}">
+    <text class="hint-icon">💡</text>
+    <text class="hint-text">{{enhanceHint}}</text>
+  </view>
+
+  <!-- STEP 3 — Actions & Output -->
+  <view class="card step-card" wx:if="{{sourceImage}}">
+    <view class="step-head">
+      <view class="step-num"><text>03</text></view>
+      <text class="step-title">Process & Download</text>
+    </view>
+
+    <!-- Action buttons -->
+    <view class="action-col">
+      <button class="btn btn-green" bindtap="onEnhance" disabled="{{isEnhancing || isChecking}}">
+        <text wx:if="{{!isEnhancing}}">✨  AI Enhance (GPT Image)</text>
+        <text wx:else>Enhancing… please wait</text>
+      </button>
+      <button class="btn btn-outline" bindtap="onCheck" disabled="{{isChecking || isEnhancing}}">
+        <text wx:if="{{!isChecking}}">✅  Check Compliance (AI)</text>
+        <text wx:else>Checking compliance…</text>
+      </button>
+      <button class="btn btn-ghost" bindtap="onSave" disabled="{{!enhancedImage && !sourceImage}}">
+        ⬇  Save to Album
+      </button>
+    </view>
+
+    <!-- Status line -->
+    <view class="status-line {{statusKind}}" wx:if="{{statusMsg}}">
+      <text>{{statusMsg}}</text>
+    </view>
+
+    <!-- Enhanced result preview -->
+    <view wx:if="{{enhancedImage}}" class="enhanced-block">
+      <text class="preview-label">AI-Enhanced Result</text>
+      <view class="enhanced-badge">by {{enhancedModel}}</view>
+      <image class="enhanced-preview" src="{{enhancedImage}}" mode="aspectFit"></image>
+    </view>
+
+    <!-- Compliance report -->
+    <view wx:if="{{complianceResult}}" class="compliance-block">
+      <view class="compliance-header">
+        <view>
+          <text class="compliance-title">Compliance Result</text>
+          <text class="compliance-sub">Processed in {{complianceResult.processingTime}}s</text>
+        </view>
+        <view class="compliance-badge {{complianceResult.isCompliant ? 'badge-pass' : 'badge-fail'}}">
+          <text>{{complianceResult.isCompliant ? '✓ PASS' : '✗ ATTENTION'}}</text>
+        </view>
+      </view>
+
+      <view class="score-row">
+        <text class="score-label">Score</text>
+        <view class="score-bar-track">
+          <view class="score-bar-fill {{scoreColor}}" style="width:{{complianceResult.complianceScore}}%"></view>
+        </view>
+        <text class="score-num">{{complianceResult.complianceScore}}/100</text>
+      </view>
+
+      <view class="pill-row">
+        <view class="pill {{confidenceClass}}">Confidence: {{confidenceLabel}}</view>
+        <view class="pill">Issues: {{complianceResult.issues.length}}</view>
+      </view>
+
+      <!-- Issues -->
+      <view wx:if="{{complianceResult.issues.length > 0}}" class="issue-list">
+        <text class="issue-heading">Issues found</text>
+        <view class="issue-item {{item.severity === 'CRITICAL' ? 'issue-critical' : item.severity === 'WARNING' ? 'issue-warn' : 'issue-info'}}"
+              wx:for="{{complianceResult.issues}}" wx:key="index">
+          <text class="issue-icon">{{item.severity === 'CRITICAL' ? '✗' : item.severity === 'WARNING' ? '⚠' : 'ℹ'}}</text>
+          <view>
+            <text class="issue-desc">{{item.description}}</text>
+            <text class="issue-suggest muted" wx:if="{{item.suggestion}}">{{item.suggestion}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- Recommendations -->
+      <view wx:if="{{complianceResult.recommendations && complianceResult.recommendations.length > 0}}" class="rec-list">
+        <text class="issue-heading">Recommendations</text>
+        <view class="rec-item" wx:for="{{complianceResult.recommendations}}" wx:key="index">
+          <text>💡 {{item}}</text>
+        </view>
+      </view>
+
+      <button class="btn btn-ghost btn-sm mt24" bindtap="onReset">Start over</button>
+    </view>
+  </view>
+
+  <!-- Bottom spacer -->
+  <view style="height:40rpx"></view>
+</view>

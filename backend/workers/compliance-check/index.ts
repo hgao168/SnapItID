@@ -6,11 +6,18 @@
  * POST /api/compliance/check
  */
 
+interface CountryRules {
+  glassesAllowed: boolean;
+  smileAllowed: boolean;
+  headCoverageAllowed: boolean;
+}
+
 interface ComplianceRequest {
   photoID?: string;
   countryCode: string;
   documentType: string;
   imageBase64?: string; // optional data URL or raw base64 sent directly from the client
+  rules?: CountryRules;
 }
 
 interface ComplianceIssue {
@@ -55,6 +62,10 @@ export default {
         return await handleComplianceCheck(request, env);
       }
 
+      if (path === '/api/compliance/enhance' && request.method === 'POST') {
+        return await handleEnhance(request, env);
+      }
+
       return new Response(JSON.stringify({ error: 'Not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
@@ -81,7 +92,7 @@ async function handleComplianceCheck(
 
   try {
     const body = (await request.json()) as ComplianceRequest;
-    const { photoID, countryCode, documentType, imageBase64 } = body;
+    const { photoID, countryCode, documentType, imageBase64, rules } = body;
 
     // Validate input
     if ((!photoID && !imageBase64) || !countryCode || !documentType) {
@@ -100,7 +111,8 @@ async function handleComplianceCheck(
       imageData,
       countryCode,
       documentType,
-      env
+      env,
+      rules
     );
 
     // Calculate score
@@ -202,14 +214,18 @@ async function runComplianceAnalysis(
   imageData: Uint8Array,
   countryCode: string,
   documentType: string,
-  env: Env
+  env: Env,
+  rules?: CountryRules
 ): Promise<ComplianceIssue[]> {
   const issues: ComplianceIssue[] = [];
 
-  // Ask a vision-language model to assess ICAO-like compliance attributes.
+  // Ask a vision-language model to assess ICAO-like passport photo compliance.
   const prompt =
     `You are an ICAO-style passport photo compliance checker for ${countryCode} ${documentType}. ` +
-    `Inspect the image and reply ONLY with compact JSON of the form ` +
+    `Look VERY carefully at the subject's eyes and face. ` +
+    `Glasses include: prescription eyeglasses, spectacles, reading glasses, sunglasses, or any eyewear with lenses and frames around the eyes. ` +
+    `Set "glasses" to true if you see ANY frames, rims, lenses, or temple arms around or on the eyes. When in doubt, set glasses to true. ` +
+    `Reply ONLY with compact JSON of the form ` +
     `{"face_detected":bool,"single_face":bool,"facing_forward":bool,"eyes_open":bool,` +
     `"neutral_expression":bool,"mouth_closed":bool,"glasses":bool,"glasses_glare":bool,` +
     `"head_covering":bool,"shadows_on_face":bool,"plain_background":bool,` +
@@ -237,7 +253,7 @@ async function runComplianceAnalysis(
   }
 
   if (parsed) {
-    mapAIFindingsToIssues(parsed, issues);
+    mapAIFindingsToIssues(parsed, issues, rules);
   } else if (issues.length === 0) {
     issues.push({
       id: 'ai_parse',
@@ -277,7 +293,8 @@ function asBool(v: unknown, fallback = true): boolean {
 
 function mapAIFindingsToIssues(
   a: Record<string, unknown>,
-  issues: ComplianceIssue[]
+  issues: ComplianceIssue[],
+  rules?: CountryRules
 ): void {
   if (!asBool(a.face_detected)) {
     issues.push({ id: 'face_missing', severity: 'CRITICAL', category: 'FACE_DETECTION', description: 'No face detected in the photo.' });
@@ -294,11 +311,21 @@ function mapAIFindingsToIssues(
   if (!asBool(a.neutral_expression) || !asBool(a.mouth_closed)) {
     issues.push({ id: 'expression', severity: 'WARNING', category: 'EXPRESSION', description: 'Expression is not neutral with mouth closed.' });
   }
-  if (asBool(a.glasses, false) && asBool(a.glasses_glare, false)) {
-    issues.push({ id: 'glare', severity: 'WARNING', category: 'GLASSES_REFLECTION', description: 'Glare detected on glasses.' });
+  // Glasses: flag as CRITICAL if detected and country rule forbids them; otherwise flag glare.
+  if (asBool(a.glasses, false)) {
+    if (rules && rules.glassesAllowed === false) {
+      issues.push({ id: 'glasses_forbidden', severity: 'CRITICAL', category: 'GLASSES', description: 'Glasses are not allowed for this country/document type. Please remove glasses.', suggestion: 'Remove glasses and retake the photo, or use AI Enhance to remove them.' });
+    } else if (asBool(a.glasses_glare, false)) {
+      issues.push({ id: 'glare', severity: 'WARNING', category: 'GLASSES_REFLECTION', description: 'Glare detected on glasses.' });
+    }
   }
+  // Head covering: CRITICAL if country forbids it, WARNING otherwise.
   if (asBool(a.head_covering, false)) {
-    issues.push({ id: 'head_cover', severity: 'WARNING', category: 'HEAD_COVERING', description: 'Head covering detected (allowed only for religious reasons in some countries).' });
+    if (rules && rules.headCoverageAllowed === false) {
+      issues.push({ id: 'head_cover_forbidden', severity: 'CRITICAL', category: 'HEAD_COVERING', description: 'Head covering is not allowed for this country/document type.' });
+    } else {
+      issues.push({ id: 'head_cover', severity: 'WARNING', category: 'HEAD_COVERING', description: 'Head covering detected (allowed only for religious reasons in some countries).' });
+    }
   }
   if (asBool(a.shadows_on_face, false)) {
     issues.push({ id: 'shadows', severity: 'WARNING', category: 'LIGHTING', description: 'Shadows visible on the face.' });
@@ -360,6 +387,116 @@ function generateID(): string {
 }
 
 /**
+ * Handle AI photo enhancement via OpenAI gpt-image-2.
+ * Takes a base64 image and re-renders it as a compliant ID photo.
+ */
+async function handleEnhance(request: Request, env: Env): Promise<Response> {
+  if (!env.OPENAI_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'OPENAI_API_KEY not configured on worker.' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+
+  let body: { imageBase64?: string; countryCode?: string; documentType?: string };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const { imageBase64, countryCode = '', documentType = 'PASSPORT', rules } = body as { imageBase64?: string; countryCode?: string; documentType?: string; rules?: CountryRules };
+  if (!imageBase64) {
+    return new Response(JSON.stringify({ error: 'imageBase64 required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeBase64Image(imageBase64);
+  } catch {
+    return new Response(JSON.stringify({ error: 'Failed to decode image' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const removeGlasses = rules && rules.glassesAllowed === false;
+  const prompt =
+    `Replace ONLY the background with a plain pure-white background (#FFFFFF). ` +
+    (removeGlasses
+      ? `CRITICAL REQUIREMENT: The subject must NOT be wearing any glasses, spectacles, eyeglasses, sunglasses, or any other eyewear in the output. ` +
+        `If the subject is currently wearing glasses, you MUST remove them completely. ` +
+        `Render the natural eyes, eyebrows, and skin around the eye area as they would look without glasses — no frame marks, no lens reflections, no temple arms. ` +
+        `This is mandatory because the destination country forbids glasses in passport photos. `
+      : `Do NOT change the person's glasses if they are wearing any. `) +
+    `Do NOT change the person in any other way — do NOT alter their face shape, skin tone, facial structure, ` +
+    `eye shape, eye colour, nose, mouth, jawline, ears, hair colour, hairstyle, wrinkles, expression, ` +
+    `clothing, or body proportions. The person must remain 100% identical and recognisable. ` +
+    `Only remove any existing background and fill it with solid white. ` +
+    `Optionally soften any harsh shadows on the white background area only. ` +
+    `This is for a ${countryCode || 'international'} ${documentType.toLowerCase()} ID photo.`;
+
+  const form = new FormData();
+  form.append('image', new Blob([bytes as unknown as BlobPart], { type: 'image/png' }), 'photo.png');
+  form.append('model', 'gpt-image-2');
+  form.append('prompt', prompt);
+  form.append('size', '1024x1024');
+  form.append('n', '1');
+  form.append('quality', 'low');
+
+  let openaiResp: Response;
+  try {
+    openaiResp = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
+      body: form,
+    });
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: 'OpenAI request failed: ' + (err instanceof Error ? err.message : 'unknown') }),
+      { status: 502, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+    );
+  }
+
+  const data = (await openaiResp.json().catch(() => ({}))) as any;
+  if (!openaiResp.ok) {
+    const msg = data?.error?.message || `OpenAI returned ${openaiResp.status}`;
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  const b64 = data?.data?.[0]?.b64_json;
+  if (!b64) {
+    return new Response(JSON.stringify({ error: 'OpenAI returned no image data' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      result: {
+        imageBase64: `data:image/png;base64,${b64}`,
+        model: 'gpt-image-2',
+      },
+    }),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    }
+  );
+}
+
+/**
  * Environment type definition
  */
 interface Env {
@@ -367,4 +504,5 @@ interface Env {
   CLOUDFLARE_ACCOUNT_ID: string;
   CLOUDFLARE_API_TOKEN: string;
   AI: Ai;
+  OPENAI_API_KEY: string;
 }

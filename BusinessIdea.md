@@ -483,3 +483,14 @@ Before publishing, check:
 * Trademark risk for “SnapIT ID”
 
 My recommendation: build the first MVP around **US, UK, Australia, Canada, China and Schengen passport/visa photos**. That is enough for App Store launch.
+
+Backend Use Cloudflare-first:
+
+Function	Best choice
+Domain/DNS	Cloudflare
+API backend	Cloudflare Workers
+Country photo rules	Cloudflare D1 or KV
+Image storage	Cloudflare R2
+Image resize/export	Cloudflare Images / Transformations
+AI provider routing	Cloudflare AI Gateway
+Website	Cloudflare Pages

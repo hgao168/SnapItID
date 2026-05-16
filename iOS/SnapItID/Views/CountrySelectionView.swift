@@ -11,11 +11,6 @@ struct CountrySelectionView: View {
         ("FR", "France"),
         ("JP", "Japan"),
         ("AU", "Australia"),
-        ("NZ", "New Zealand"),
-        ("SG", "Singapore"),
-        ("CN", "China"),
-        ("IN", "India"),
-        ("BR", "Brazil"),
     ]
     
     var body: some View {

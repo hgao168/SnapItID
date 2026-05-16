@@ -1,0 +1,230 @@
+/* pages/studio/studio.wxss */
+
+.page {
+  padding-bottom: 60rpx;
+}
+
+/* --- hero --- */
+.hero {
+  padding: 56rpx 32rpx 40rpx;
+  text-align: center;
+}
+.hero-brand {
+  font-size: 54rpx;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -1rpx;
+}
+.brand-dot { color: #2563eb; }
+.hero-sub {
+  display: block;
+  font-size: 26rpx;
+  color: #888;
+  margin-top: 10rpx;
+}
+.hero-stats {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 36rpx;
+  padding: 24rpx 0;
+  border-top: 1rpx solid rgba(255,255,255,0.07);
+  border-bottom: 1rpx solid rgba(255,255,255,0.07);
+}
+.stat { display: flex; flex-direction: column; align-items: center; gap: 4rpx; }
+.stat-n { font-size: 34rpx; font-weight: 700; color: #fff; }
+.stat-l { font-size: 22rpx; color: #666; }
+
+/* --- step card --- */
+.step-card { padding: 28rpx 28rpx 32rpx; }
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+.step-num {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: rgba(37,99,235,0.2);
+  border: 1rpx solid rgba(37,99,235,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.step-num text { font-size: 22rpx; font-weight: 700; color: #93c5fd; }
+.step-title { font-size: 32rpx; font-weight: 700; color: #fff; }
+
+/* --- field row --- */
+.field-row { display: flex; gap: 20rpx; margin-bottom: 20rpx; }
+.field { flex: 1; }
+.field-label { font-size: 24rpx; color: #888; display: block; margin-bottom: 10rpx; }
+.picker-val {
+  background: rgba(255,255,255,0.07);
+  border: 1rpx solid rgba(255,255,255,0.12);
+  border-radius: 12rpx;
+  padding: 18rpx 20rpx;
+  font-size: 26rpx;
+  color: #e8e8e8;
+}
+
+/* --- rules panel --- */
+.rules-panel {
+  background: rgba(255,255,255,0.04);
+  border-radius: 14rpx;
+  padding: 20rpx 22rpx;
+  margin-top: 8rpx;
+}
+.rules-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid rgba(255,255,255,0.05);
+}
+.rules-row:last-child { border-bottom: none; }
+.rules-key { font-size: 24rpx; color: #777; }
+.rules-val { font-size: 24rpx; color: #d4d4d4; font-weight: 500; }
+.rules-val.ok { color: #86efac; }
+.rules-val.no { color: #fca5a5; }
+.rules-loading { padding: 20rpx 0; }
+
+/* --- drop zone --- */
+.drop-zone {
+  border: 2rpx dashed rgba(255,255,255,0.2);
+  border-radius: 16rpx;
+  padding: 56rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14rpx;
+}
+.dz-icon { font-size: 72rpx; }
+.dz-main { font-size: 28rpx; font-weight: 600; color: #e8e8e8; }
+.dz-sub { font-size: 24rpx; color: #666; text-align: center; }
+
+/* --- source preview --- */
+.source-preview {
+  width: 100%;
+  height: 480rpx;
+  border-radius: 14rpx;
+  background: #111;
+}
+.photo-actions { margin-top: 16rpx; }
+
+/* --- enhance hint --- */
+.enhance-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin: 0 24rpx 24rpx;
+  padding: 22rpx 24rpx;
+  background: rgba(34,197,94,0.08);
+  border: 1rpx solid rgba(34,197,94,0.3);
+  border-radius: 16rpx;
+}
+.hint-icon { font-size: 34rpx; flex-shrink: 0; }
+.hint-text { font-size: 25rpx; color: #d4d4d4; line-height: 1.6; }
+
+/* --- action col --- */
+.action-col { display: flex; flex-direction: column; gap: 16rpx; }
+.btn-sm { height: 72rpx; font-size: 26rpx; }
+.mt24 { margin-top: 24rpx; }
+
+/* --- status line --- */
+.status-line {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  color: #aaa;
+  padding: 12rpx 0;
+}
+.status-line.ok { color: #86efac; }
+.status-line.err { color: #fca5a5; }
+
+/* --- enhanced block --- */
+.enhanced-block { margin-top: 28rpx; }
+.preview-label { font-size: 26rpx; font-weight: 600; color: #e8e8e8; display: block; margin-bottom: 10rpx; }
+.enhanced-badge {
+  display: inline-block;
+  font-size: 21rpx;
+  color: #86efac;
+  background: rgba(34,197,94,0.12);
+  border-radius: 100rpx;
+  padding: 4rpx 16rpx;
+  margin-bottom: 14rpx;
+}
+.enhanced-preview {
+  width: 100%;
+  min-height: 400rpx;
+  border-radius: 14rpx;
+  background: #fff;
+}
+
+/* --- compliance block --- */
+.compliance-block { margin-top: 28rpx; }
+.compliance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20rpx;
+}
+.compliance-title { font-size: 30rpx; font-weight: 700; color: #fff; display: block; }
+.compliance-sub { font-size: 22rpx; color: #888; display: block; margin-top: 4rpx; }
+.compliance-badge {
+  padding: 8rpx 20rpx;
+  border-radius: 100rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+.badge-pass { background: rgba(34,197,94,0.2); color: #86efac; }
+.badge-fail { background: rgba(239,68,68,0.2); color: #fca5a5; }
+
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 18rpx;
+}
+.score-label { font-size: 24rpx; color: #888; flex-shrink: 0; }
+.score-bar-track {
+  flex: 1;
+  height: 10rpx;
+  background: rgba(255,255,255,0.1);
+  border-radius: 100rpx;
+  overflow: hidden;
+}
+.score-bar-fill {
+  height: 100%;
+  border-radius: 100rpx;
+  transition: width 0.4s;
+}
+.score-green { background: #22c55e; }
+.score-amber { background: #f59e0b; }
+.score-red   { background: #ef4444; }
+.score-num { font-size: 24rpx; font-weight: 600; color: #e8e8e8; flex-shrink: 0; }
+
+.pill-row { display: flex; gap: 12rpx; flex-wrap: wrap; margin-bottom: 20rpx; }
+
+.issue-list, .rec-list { margin-top: 16rpx; }
+.issue-heading { font-size: 26rpx; font-weight: 600; color: #e8e8e8; display: block; margin-bottom: 12rpx; }
+.issue-item {
+  display: flex;
+  gap: 14rpx;
+  align-items: flex-start;
+  padding: 16rpx;
+  border-radius: 12rpx;
+  margin-bottom: 10rpx;
+}
+.issue-critical { background: rgba(239,68,68,0.08); border: 1rpx solid rgba(239,68,68,0.2); }
+.issue-warn     { background: rgba(251,191,36,0.08); border: 1rpx solid rgba(251,191,36,0.2); }
+.issue-info     { background: rgba(37,99,235,0.08);  border: 1rpx solid rgba(37,99,235,0.2); }
+.issue-icon { font-size: 28rpx; flex-shrink: 0; margin-top: 2rpx; }
+.issue-desc { font-size: 26rpx; font-weight: 600; color: #e8e8e8; display: block; }
+.issue-suggest { font-size: 23rpx; display: block; margin-top: 4rpx; }
+
+.rec-item {
+  font-size: 25rpx;
+  color: #c4c4c4;
+  padding: 10rpx 0;
+  border-bottom: 1rpx solid rgba(255,255,255,0.05);
+}

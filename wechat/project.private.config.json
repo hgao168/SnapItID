@@ -1,0 +1,5 @@
+{
+  "appid": "YOUR_APPID_HERE",
+  "projectname": "SnapItID",
+  "setting": { "es6": true, "enhance": true, "postcss": true }
+}

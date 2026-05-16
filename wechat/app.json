@@ -1,0 +1,56 @@
+{
+  "pages": [
+    "pages/studio/studio",
+    "pages/examples/examples",
+    "pages/how/how",
+    "pages/result/result"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#0a0a0a",
+    "navigationBarTitleText": "SnapItID",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#0a0a0a"
+  },
+  "tabBar": {
+    "color": "#888888",
+    "selectedColor": "#ffffff",
+    "backgroundColor": "#111111",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/studio/studio",
+        "text": "Studio",
+        "iconPath": "assets/icons/camera.png",
+        "selectedIconPath": "assets/icons/camera-on.png"
+      },
+      {
+        "pagePath": "pages/examples/examples",
+        "text": "Examples",
+        "iconPath": "assets/icons/photo.png",
+        "selectedIconPath": "assets/icons/photo-on.png"
+      },
+      {
+        "pagePath": "pages/how/how",
+        "text": "How it works",
+        "iconPath": "assets/icons/info.png",
+        "selectedIconPath": "assets/icons/info-on.png"
+      }
+    ]
+  },
+  "networkTimeout": {
+    "request": 30000
+  },
+  "permission": {
+    "scope.camera": {
+      "desc": "SnapItID needs camera access to capture your passport photo"
+    },
+    "scope.writePhotosAlbum": {
+      "desc": "SnapItID needs access to save your compliant photo to your album"
+    }
+  },
+  "requiredPrivateInfos": ["chooseMedia"],
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "usingComponents": {}
+}

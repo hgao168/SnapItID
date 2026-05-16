@@ -1,0 +1,54 @@
+# Xcode
+xcuserdata/
+*.xcworkspace
+build/
+DerivedData/
+*.pbxuser
+*.perspectivev3
+*.xcbkptlist
+
+# Swift Package Manager
+.build/
+*.xcframework
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Environment
+.env
+.env.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cloudflare Workers
+dist/
+node_modules/
+.wrangler/
+wrangler.lock
+
+# Logs
+*.log
+npm-debug.log*
+
+# Node
+package-lock.json
+yarn.lock
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary
+tmp/
+temp/
+*.tmp

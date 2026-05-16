@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SnapItID | Global Identity Photo AI</title>
-  <meta name="description" content="Global AI identity photo platform for passport and visa compliance checks.">
+  <title>SnapItID | Passport & Visa Photo Studio</title>
+  <meta name="description" content="Upload or capture a photo and get a compliant passport or visa image for any country in seconds.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Manrope:wght@400;500;700&display=swap" rel="stylesheet">
@@ -18,62 +18,151 @@
       <span class="brand-mark">SI</span>
       <div>
         <h1>SnapItID</h1>
-        <p>Global identity photo compliance platform</p>
+        <p>Passport &amp; visa photo studio</p>
       </div>
     </div>
-    <a class="cta" href="#compliance">Try Live API</a>
+    <a class="cta" href="#studio">Open Studio</a>
   </header>
 
   <main>
     <section class="hero reveal">
-      <p class="eyebrow">Now live on snapitid.ai</p>
-      <h2>Passport and visa photo checks, powered by Cloudflare edge.</h2>
-      <p class="lead">Fast country rules lookup, compliance scoring, and issue-level feedback for global identity documents.</p>
+      <p class="eyebrow">Live on snapitid.ai</p>
+      <h2>Get a compliant passport photo in under a minute.</h2>
+      <p class="lead">Upload a selfie or use your camera. We remove the background, apply your country's required color, and crop to the exact passport or visa size — ready to download.</p>
       <div class="hero-actions">
-        <a class="btn primary" href="#rules">Get Country Rules</a>
-        <a class="btn ghost" href="#compliance">Run Compliance Check</a>
+        <a class="btn primary" href="#studio">Start Now</a>
+        <a class="btn ghost" href="#how">How it works</a>
       </div>
     </section>
 
-    <section id="rules" class="card reveal stagger-1">
-      <h3>Country Rules</h3>
-      <p>Fetch live requirements from your Cloudflare Worker route.</p>
-      <form id="rules-form" class="form-row">
-        <label for="countryCode">Country Code</label>
-        <input id="countryCode" name="countryCode" maxlength="2" value="US" required>
-        <button type="submit">Fetch Rules</button>
-      </form>
-      <pre id="rules-result" class="result" aria-live="polite">Waiting for request...</pre>
+    <section id="studio" class="card reveal stagger-1">
+      <div class="studio-header">
+        <h3>Photo Studio</h3>
+        <span id="engine-status" class="pill">Initializing AI…</span>
+      </div>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <label for="countrySelect">Country</label>
+            <select id="countrySelect">
+              <option value="US">United States</option>
+              <option value="CA">Canada</option>
+              <option value="GB">United Kingdom</option>
+              <option value="DE">Germany</option>
+              <option value="FR">France</option>
+              <option value="JP">Japan</option>
+              <option value="AU">Australia</option>
+            </select>
+
+            <label for="docSelect">Document</label>
+            <select id="docSelect">
+              <option value="PASSPORT">Passport</option>
+              <option value="VISA">Visa</option>
+            </select>
+
+            <div id="rulesPanel" class="rules-panel">Select a country to view requirements.</div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="source-tabs" role="tablist">
+              <button type="button" class="tab active" data-tab="upload" role="tab">Upload Photo</button>
+              <button type="button" class="tab" data-tab="camera" role="tab">Use Camera</button>
+            </div>
+
+            <div id="upload-pane" class="pane active">
+              <label for="fileInput" class="dropzone" id="dropzone">
+                <strong>Drop a photo here</strong>
+                <span>or click to browse (JPG / PNG, face centered)</span>
+                <input id="fileInput" type="file" accept="image/*" hidden>
+              </label>
+            </div>
+
+            <div id="camera-pane" class="pane">
+              <video id="videoPreview" autoplay playsinline muted></video>
+              <div class="camera-actions">
+                <button type="button" id="startCameraBtn" class="btn-secondary">Start Camera</button>
+                <button type="button" id="captureBtn" class="btn-secondary" disabled>Capture</button>
+                <button type="button" id="stopCameraBtn" class="btn-secondary" disabled>Stop</button>
+              </div>
+            </div>
+          </div>
+        </li>
+
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <p class="step-help">Adjust if needed, then download your compliant photo.</p>
+            <div class="preview-grid">
+              <div class="preview-block">
+                <p class="preview-label">Original</p>
+                <div class="preview-frame">
+                  <img id="originalPreview" alt="Original photo preview">
+                  <span id="originalPlaceholder" class="placeholder">No photo yet</span>
+                </div>
+              </div>
+              <div class="preview-block">
+                <p class="preview-label">Compliant photo</p>
+                <div class="preview-frame">
+                  <canvas id="outputCanvas"></canvas>
+                  <span id="outputPlaceholder" class="placeholder">Awaiting input</span>
+                </div>
+                <div class="output-meta" id="outputMeta"></div>
+              </div>
+            </div>
+
+            <div class="controls">
+              <label for="zoomRange">Face zoom</label>
+              <input id="zoomRange" type="range" min="0.6" max="1.6" step="0.01" value="1">
+              <label for="offsetY">Vertical offset</label>
+              <input id="offsetY" type="range" min="-0.3" max="0.3" step="0.005" value="0">
+              <label for="bgColor">Background</label>
+              <input id="bgColor" type="color" value="#ffffff">
+            </div>
+
+            <div class="action-row">
+              <button type="button" id="processBtn" class="btn primary" disabled>Process Photo</button>
+              <button type="button" id="downloadBtn" class="btn ghost" disabled>Download JPG</button>
+            </div>
+
+            <p id="statusLine" class="status-line" aria-live="polite"></p>
+          </div>
+        </li>
+      </ol>
     </section>
 
-    <section id="compliance" class="card reveal stagger-2">
-      <h3>Compliance Check</h3>
-      <p>Run a test call to the compliance API endpoint.</p>
-      <form id="compliance-form" class="grid-form">
-        <label for="photoID">Photo ID</label>
-        <input id="photoID" name="photoID" placeholder="cloudflare-image-id" required>
-
-        <label for="complianceCountry">Country</label>
-        <input id="complianceCountry" name="countryCode" maxlength="2" value="US" required>
-
-        <label for="documentType">Document Type</label>
-        <select id="documentType" name="documentType">
-          <option value="PASSPORT">Passport</option>
-          <option value="VISA">Visa</option>
-          <option value="DRIVER_LICENSE">Driver License</option>
-          <option value="ID_CARD">ID Card</option>
-        </select>
-
-        <button type="submit">Check Compliance</button>
-      </form>
-      <pre id="compliance-result" class="result" aria-live="polite">Waiting for request...</pre>
+    <section id="how" class="card reveal stagger-2">
+      <h3>How it works</h3>
+      <div class="how-grid">
+        <div>
+          <h4>1. Pick country &amp; doc</h4>
+          <p>We fetch live rules from our Cloudflare Worker (size, background color, smiling, glasses).</p>
+        </div>
+        <div>
+          <h4>2. Capture or upload</h4>
+          <p>Use your phone or laptop camera, or upload an existing photo. Everything runs in your browser.</p>
+        </div>
+        <div>
+          <h4>3. Background removal</h4>
+          <p>An on-device AI segmentation model isolates your head and shoulders.</p>
+        </div>
+        <div>
+          <h4>4. Auto crop &amp; download</h4>
+          <p>The image is recomposed onto the required background color and exported at 300 DPI ready for print.</p>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer>
-    <p>SnapItID on Cloudflare | Domain: snapitid.ai</p>
+    <p>SnapItID · snapitid.ai · Built on Cloudflare</p>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="app.js"></script>
 </body>
 </html>

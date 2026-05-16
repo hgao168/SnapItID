@@ -7,9 +7,10 @@
  */
 
 interface ComplianceRequest {
-  photoID: string;
+  photoID?: string;
   countryCode: string;
   documentType: string;
+  imageBase64?: string; // optional data URL or raw base64 sent directly from the client
 }
 
 interface ComplianceIssue {
@@ -80,20 +81,21 @@ async function handleComplianceCheck(
 
   try {
     const body = (await request.json()) as ComplianceRequest;
-    const { photoID, countryCode, documentType } = body;
+    const { photoID, countryCode, documentType, imageBase64 } = body;
 
     // Validate input
-    if (!photoID || !countryCode || !documentType) {
+    if ((!photoID && !imageBase64) || !countryCode || !documentType) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Fetch image from Cloudflare Images
-    const imageData = await fetchImageFromCloudflare(photoID, env);
+    // Prefer inline image; fall back to Cloudflare Images by ID.
+    const imageData = imageBase64
+      ? decodeBase64Image(imageBase64)
+      : await fetchImageFromCloudflare(photoID as string, env);
 
-    // Run AI compliance check using Vision API (via Cloudflare)
     const complianceIssues = await runComplianceAnalysis(
       imageData,
       countryCode,
@@ -158,12 +160,24 @@ async function handleComplianceCheck(
 }
 
 /**
+ * Decode a base64-encoded image (with or without a data URL prefix) into bytes.
+ */
+function decodeBase64Image(input: string): Uint8Array {
+  const commaIdx = input.indexOf(',');
+  const b64 = commaIdx >= 0 && input.startsWith('data:') ? input.slice(commaIdx + 1) : input;
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
  * Fetch image from Cloudflare Images
  */
 async function fetchImageFromCloudflare(
   imageID: string,
   env: Env
-): Promise<Buffer> {
+): Promise<Uint8Array> {
   const response = await fetch(
     `https://imagedelivery.net/${env.CLOUDFLARE_ACCOUNT_ID}/${imageID}/original`,
     {
@@ -178,70 +192,137 @@ async function fetchImageFromCloudflare(
   }
 
   const buffer = await response.arrayBuffer();
-  return Buffer.from(buffer);
+  return new Uint8Array(buffer);
 }
 
 /**
- * Run AI compliance analysis on photo
+ * Run AI compliance analysis on photo using Cloudflare Workers AI (vision model).
  */
 async function runComplianceAnalysis(
-  imageData: Buffer,
+  imageData: Uint8Array,
   countryCode: string,
   documentType: string,
   env: Env
 ): Promise<ComplianceIssue[]> {
   const issues: ComplianceIssue[] = [];
 
-  // In production, you would call:
-  // 1. Cloudflare Workers AI for vision analysis
-  // 2. Your own ML model via API
-  // 3. ICAO biometric standards validation
+  // Ask a vision-language model to assess ICAO-like compliance attributes.
+  const prompt =
+    `You are an ICAO-style passport photo compliance checker for ${countryCode} ${documentType}. ` +
+    `Inspect the image and reply ONLY with compact JSON of the form ` +
+    `{"face_detected":bool,"single_face":bool,"facing_forward":bool,"eyes_open":bool,` +
+    `"neutral_expression":bool,"mouth_closed":bool,"glasses":bool,"glasses_glare":bool,` +
+    `"head_covering":bool,"shadows_on_face":bool,"plain_background":bool,` +
+    `"background_uniform_color":bool,"head_size_ok":bool,"image_sharp":bool,` +
+    `"notes":string}. Do not include any prose outside JSON.`;
 
-  // For MVP, we'll use basic checks
-  const checks = [
-    checkFaceDetection(imageData),
-    checkHeadSize(imageData),
-    checkEyePosition(imageData),
-    checkBackgroundQuality(imageData),
-    await checkResolution(imageData),
-  ];
-
-  for (const check of checks) {
-    const result = await Promise.resolve(check);
-    if (result) {
-      issues.push(result);
-    }
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    const aiResponse: any = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+      image: Array.from(imageData),
+      prompt,
+      max_tokens: 512,
+    });
+    const text: string = typeof aiResponse === 'string'
+      ? aiResponse
+      : (aiResponse?.description ?? aiResponse?.response ?? aiResponse?.text ?? '');
+    parsed = extractJSON(text);
+  } catch (err) {
+    issues.push({
+      id: 'ai_unavailable',
+      severity: 'WARNING',
+      category: 'AI_SERVICE',
+      description: 'AI vision model unavailable: ' + (err instanceof Error ? err.message : 'unknown'),
+    });
   }
+
+  if (parsed) {
+    mapAIFindingsToIssues(parsed, issues);
+  } else if (issues.length === 0) {
+    issues.push({
+      id: 'ai_parse',
+      severity: 'WARNING',
+      category: 'AI_SERVICE',
+      description: 'AI returned a non-JSON response — compliance attributes could not be evaluated.',
+    });
+  }
+
+  // Lightweight non-AI checks (image size, payload sanity).
+  const sizeIssue = checkPayloadSize(imageData);
+  if (sizeIssue) issues.push(sizeIssue);
 
   return issues;
 }
 
 /**
- * Basic compliance checks (MVP version)
- * In production, these would use ML models
+ * Try to extract the first JSON object from a text blob.
  */
-function checkFaceDetection(imageData: Buffer): ComplianceIssue | null {
-  // TODO: Implement face detection using CloudflareAI or API
-  return null;
+function extractJSON(text: string): Record<string, unknown> | null {
+  if (!text) return null;
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 }
 
-function checkHeadSize(imageData: Buffer): ComplianceIssue | null {
-  // TODO: Implement head size validation
-  return null;
+function asBool(v: unknown, fallback = true): boolean {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') return /^(true|yes|1)$/i.test(v.trim());
+  return fallback;
 }
 
-function checkEyePosition(imageData: Buffer): ComplianceIssue | null {
-  // TODO: Implement eye position validation
-  return null;
+function mapAIFindingsToIssues(
+  a: Record<string, unknown>,
+  issues: ComplianceIssue[]
+): void {
+  if (!asBool(a.face_detected)) {
+    issues.push({ id: 'face_missing', severity: 'CRITICAL', category: 'FACE_DETECTION', description: 'No face detected in the photo.' });
+  }
+  if (asBool(a.face_detected) && !asBool(a.single_face)) {
+    issues.push({ id: 'multi_face', severity: 'CRITICAL', category: 'FACE_DETECTION', description: 'More than one face detected.' });
+  }
+  if (!asBool(a.facing_forward)) {
+    issues.push({ id: 'not_forward', severity: 'CRITICAL', category: 'EYE_POSITION', description: 'Subject is not facing the camera directly.' });
+  }
+  if (!asBool(a.eyes_open)) {
+    issues.push({ id: 'eyes_closed', severity: 'CRITICAL', category: 'EYE_POSITION', description: 'Eyes are not fully open.' });
+  }
+  if (!asBool(a.neutral_expression) || !asBool(a.mouth_closed)) {
+    issues.push({ id: 'expression', severity: 'WARNING', category: 'EXPRESSION', description: 'Expression is not neutral with mouth closed.' });
+  }
+  if (asBool(a.glasses, false) && asBool(a.glasses_glare, false)) {
+    issues.push({ id: 'glare', severity: 'WARNING', category: 'GLASSES_REFLECTION', description: 'Glare detected on glasses.' });
+  }
+  if (asBool(a.head_covering, false)) {
+    issues.push({ id: 'head_cover', severity: 'WARNING', category: 'HEAD_COVERING', description: 'Head covering detected (allowed only for religious reasons in some countries).' });
+  }
+  if (asBool(a.shadows_on_face, false)) {
+    issues.push({ id: 'shadows', severity: 'WARNING', category: 'LIGHTING', description: 'Shadows visible on the face.' });
+  }
+  if (!asBool(a.plain_background) || !asBool(a.background_uniform_color)) {
+    issues.push({ id: 'bg', severity: 'WARNING', category: 'BACKGROUND_DETECTED', description: 'Background is not plain / uniform.' });
+  }
+  if (!asBool(a.head_size_ok)) {
+    issues.push({ id: 'head_size', severity: 'WARNING', category: 'HEAD_SIZE', description: 'Head size appears outside the required range.' });
+  }
+  if (!asBool(a.image_sharp)) {
+    issues.push({ id: 'sharpness', severity: 'WARNING', category: 'SHARPNESS', description: 'Image is blurry or not sharp.' });
+  }
 }
 
-function checkBackgroundQuality(imageData: Buffer): ComplianceIssue | null {
-  // TODO: Implement background quality check
-  return null;
-}
-
-async function checkResolution(imageData: Buffer): Promise<ComplianceIssue | null> {
-  // TODO: Implement resolution check
+function checkPayloadSize(imageData: Uint8Array): ComplianceIssue | null {
+  if (imageData.byteLength < 5_000) {
+    return {
+      id: 'too_small',
+      severity: 'WARNING',
+      category: 'RESOLUTION',
+      description: 'Image payload is unusually small; resolution may be too low.',
+    };
+  }
   return null;
 }
 
@@ -285,4 +366,5 @@ interface Env {
   SNAPITID_KV: KVNamespace;
   CLOUDFLARE_ACCOUNT_ID: string;
   CLOUDFLARE_API_TOKEN: string;
+  AI: Ai;
 }

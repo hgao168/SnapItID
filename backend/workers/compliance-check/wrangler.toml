@@ -13,3 +13,7 @@ routes = [
 [[kv_namespaces]]
 binding = "SNAPITID_KV"
 id = "b07b21c27d4c48acaf8332dfe2b9abbf"
+
+# Cloudflare Workers AI binding (no API key required — uses the worker's identity)
+[ai]
+binding = "AI"

@@ -223,6 +223,17 @@ select, input[type="text"], input[type="file"] {
   display: block;
 }
 
+.camera-hint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f7fc;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
 .camera-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .btn-secondary {
   font: inherit;
@@ -291,6 +302,7 @@ select, input[type="text"], input[type="file"] {
 }
 .controls input[type="range"] { width: 100%; }
 .controls input[type="color"] { width: 60px; height: 36px; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: none; cursor: pointer; }
+.controls input[type="color"]:disabled { cursor: not-allowed; opacity: 0.75; }
 
 .action-row { display: flex; gap: 10px; flex-wrap: wrap; }
 

@@ -84,6 +84,9 @@
 
             <div id="camera-pane" class="pane">
               <video id="videoPreview" autoplay playsinline muted></video>
+              <p class="camera-hint">
+                If Start Camera does nothing, allow camera access in your browser, then reload this page over HTTPS or localhost.
+              </p>
               <div class="camera-actions">
                 <button type="button" id="startCameraBtn" class="btn-secondary">Start Camera</button>
                 <button type="button" id="captureBtn" class="btn-secondary" disabled>Capture</button>
@@ -120,16 +123,19 @@
               <input id="zoomRange" type="range" min="0.6" max="1.6" step="0.01" value="1">
               <label for="offsetY">Vertical offset</label>
               <input id="offsetY" type="range" min="-0.3" max="0.3" step="0.005" value="0">
-              <label for="bgColor">Background</label>
+              <label for="bgColor">Background color (fixed by rule)</label>
               <input id="bgColor" type="color" value="#ffffff">
             </div>
 
             <div class="action-row">
               <button type="button" id="processBtn" class="btn primary" disabled>Process Photo</button>
+              <button type="button" id="checkBtn" class="btn ghost" disabled>Check Compliance (AI)</button>
               <button type="button" id="downloadBtn" class="btn ghost" disabled>Download JPG</button>
             </div>
 
             <p id="statusLine" class="status-line" aria-live="polite"></p>
+            <div id="complianceReport" class="rules-panel" hidden></div>
+            <p id="endpointInfo" class="output-meta"></p>
           </div>
         </li>
       </ol>

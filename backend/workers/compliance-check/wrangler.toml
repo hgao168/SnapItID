@@ -12,4 +12,4 @@ routes = [
 
 [[kv_namespaces]]
 binding = "SNAPITID_KV"
-id = "REPLACE_WITH_KV_ID_AFTER_CREATE"
+id = "b07b21c27d4c48acaf8332dfe2b9abbf"

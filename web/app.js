@@ -14,6 +14,10 @@ import { LOCAL_COUNTRY_RULES } from "./rules-data.js";
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
 
 const els = {
+  header: document.querySelector(".site-header"),
+  navToggle: document.getElementById("navToggle"),
+  navLinks: document.getElementById("navLinks"),
+  navAnchors: document.querySelectorAll(".nav-links a[href^='#']"),
   engineStatus: document.getElementById("engine-status"),
   lang: document.getElementById("langSelect"),
   country: document.getElementById("countrySelect"),
@@ -58,6 +62,9 @@ const state = {
   faceDetectorReady: false,
   apiBase: null,         // the API base that responded successfully
   lastProcessedDataURL: null,
+  lastProcessedRawDataURL: null,
+  lastOutputKind: null,  // "processed" or "enhanced"
+  lastEnhancedRawDataURL: null,
 };
 
 let listenersBound = false;
@@ -252,6 +259,30 @@ async function fetchJSON(url, options) {
   return data;
 }
 
+function captureOutputSnapshotDataURL() {
+  if (!els.outputCanvas || !els.outputCanvas.parentElement) return null;
+  if (!els.outputCanvas.parentElement.classList.contains("has-content")) return null;
+  try {
+    return els.outputCanvas.toDataURL("image/jpeg", 0.95);
+  } catch (_err) {
+    return null;
+  }
+}
+
+function makeImageFingerprint(dataUrl) {
+  const raw = String(dataUrl || "");
+  const base64 = raw.includes(",") ? raw.split(",")[1] : raw;
+  if (!base64) return "none";
+  let hash = 2166136261;
+  const len = base64.length;
+  const step = Math.max(1, Math.floor(len / 1024));
+  for (let i = 0; i < len; i += step) {
+    hash ^= base64.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${len}-${(hash >>> 0).toString(16)}`;
+}
+
 /* ---------- segmentation engine ---------- */
 async function initSegmenter() {
   setEngine("Loading AI model…");
@@ -355,8 +386,8 @@ async function detectHeadBoundsMediaPipe(canvas) {
     const fh = bb.height * H;
     if (fw <= 0 || fh <= 0) return null;
     // Expand face box to full head (hair + chin/jaw + ears).
-    const top = Math.max(0, Math.floor(fy - fh * 0.35));
-    const bottom = Math.min(H - 1, Math.ceil(fy + fh * 1.15));
+    const top = Math.max(0, Math.floor(fy - fh * 0.28));
+    const bottom = Math.min(H - 1, Math.ceil(fy + fh * 1.06));
     const left = Math.max(0, Math.floor(fx - fw * 0.2));
     const right = Math.min(W - 1, Math.ceil(fx + fw * 1.2));
     if (right <= left || bottom <= top) return null;
@@ -422,7 +453,20 @@ function updateEndpointInfo(err) {
 
 /* ---------- AI compliance check ---------- */
 async function runComplianceCheck() {
-  if (!state.lastProcessedDataURL) {
+  const snapshot = captureOutputSnapshotDataURL();
+  const useEnhancedRaw = state.lastOutputKind === "enhanced" && !!state.lastEnhancedRawDataURL;
+  const useProcessedRaw = state.lastOutputKind === "processed" && !!state.lastProcessedRawDataURL;
+  const imageDataURL = useEnhancedRaw
+    ? state.lastEnhancedRawDataURL
+    : useProcessedRaw
+      ? state.lastProcessedRawDataURL
+      : (snapshot || state.lastProcessedDataURL);
+  const sourceForCheck = useEnhancedRaw
+    ? "enhanced-raw"
+    : useProcessedRaw
+      ? "processed-raw"
+      : (state.lastOutputKind || "processed");
+  if (!imageDataURL) {
     setStatus("Process a photo first.", "err");
     return;
   }
@@ -432,28 +476,39 @@ async function runComplianceCheck() {
   }
 
   els.checkBtn.disabled = true;
-  setStatus("Running AI compliance check…");
+  setStatus("Running AI compliance check on the latest output…");
   els.complianceReport.hidden = true;
   els.complianceReport.textContent = "";
 
   try {
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const fingerprint = makeImageFingerprint(imageDataURL);
+
     const payload = {
       countryCode: els.country.value,
       documentType: els.doc.value,
-      imageBase64: state.lastProcessedDataURL, // data URL; worker can parse
+      imageBase64: imageDataURL, // data URL; worker can parse
+      requestId,
+      clientFingerprint: fingerprint,
+      imageSource: sourceForCheck,
+      checkMode: "latest-output",
       rules: state.rules ? {
         glassesAllowed: state.rules.glassesAllowed,
         smileAllowed: state.rules.smileAllowed,
         headCoverageAllowed: state.rules.headCoverageAllowed,
       } : undefined,
     };
-    const response = await fetchJSON(`${state.apiBase}/api/compliance/check`, {
+    const response = await fetchJSON(`${state.apiBase}/api/compliance/check?t=${Date.now()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const result = unwrapApiResult(response);
-    renderComplianceResult(result);
+    renderComplianceResult(result, {
+      requestId,
+      fingerprint,
+      imageSource: sourceForCheck,
+    });
     setStatus("AI compliance check complete.", "ok");
   } catch (err) {
     console.error(err);
@@ -476,6 +531,11 @@ async function runAIEnhance() {
 
   els.enhanceBtn.disabled = true;
   if (els.checkBtn) els.checkBtn.disabled = true;
+  // Clear any stale compliance report from a previous Check on the original photo.
+  if (els.complianceReport) {
+    els.complianceReport.hidden = true;
+    els.complianceReport.innerHTML = "";
+  }
   setStatus("Enhancing photo with AI… this can take 10–30 seconds.");
 
   try {
@@ -498,6 +558,7 @@ async function runAIEnhance() {
     const dataUrl = result && result.imageBase64;
     const modelName = result && typeof result.model === "string" ? result.model : "AI model";
     if (!dataUrl) throw new Error("AI returned no image");
+    state.lastEnhancedRawDataURL = dataUrl;
 
     // Load enhanced image into a temporary <img>, then redraw to the output canvas
     // at the correct passport/visa dimensions so download keeps proper sizing.
@@ -548,7 +609,11 @@ async function runAIEnhance() {
         offsetYFrac,
         { fillOutput: true }
       );
-      ctx.drawImage(img, transform.dx, transform.dy, transform.drawW, transform.drawH);
+      // Minor visual bias for AI-enhanced output: shift slightly down and right
+      // to compensate for gpt-image-2 tending to render the head a touch high/left.
+      const biasX = outW * 0.035;
+      const biasY = outH * 0.03;
+      ctx.drawImage(img, transform.dx + biasX, transform.dy + biasY, transform.drawW, transform.drawH);
     } else {
       // No FaceDetector: run MediaPipe segmentation on the enhanced image to find
       // the actual person/head position for compliance framing.
@@ -578,7 +643,9 @@ async function runAIEnhance() {
         }
       }
       if (aiTransform) {
-        ctx.drawImage(img, aiTransform.dx, aiTransform.dy, aiTransform.drawW, aiTransform.drawH);
+        const biasX = outW * 0.035;
+        const biasY = outH * 0.03;
+        ctx.drawImage(img, aiTransform.dx + biasX, aiTransform.dy + biasY, aiTransform.drawW, aiTransform.drawH);
       } else {
         // Last resort: contain-fit centered
         const containScale = Math.min(outW / img.width, outH / img.height);
@@ -591,6 +658,7 @@ async function runAIEnhance() {
     }
 
     state.lastProcessedDataURL = canvas.toDataURL("image/jpeg", 0.95);
+    state.lastOutputKind = "enhanced";
     els.outputMeta.textContent =
       `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI · enhanced by ${modelName}`;
     canvas.parentElement.classList.add("has-content");
@@ -614,7 +682,7 @@ function loadImage(src) {
   });
 }
 
-function renderComplianceResult(result) {
+function renderComplianceResult(result, meta) {
   if (!result) {
     els.complianceReport.hidden = true;
     return;
@@ -665,7 +733,12 @@ function renderComplianceResult(result) {
     : "";
 
   els.complianceReport.innerHTML = `
+    <div class="compliance-verdict ${compliant ? 'pass' : 'fail'}">
+      <span class="compliance-thumb" aria-hidden="true">${compliant ? '\u{1F44D}' : '\u{1F44E}'}</span>
+      <span class="compliance-verdict-text">${compliant ? 'PASS' : 'NEEDS WORK'}</span>
+    </div>
     <div><strong>AI Compliance:</strong> ${compliant ? "PASS" : "NEEDS WORK"}${score !== null ? ` · Score ${score}/100` : ""}${passRate !== null ? ` · Checks passed ${passRate}%` : ""} · Confidence ${confidence}</div>
+    <div class="muted">Checked image: ${meta && meta.imageSource ? meta.imageSource : "processed"} · Fingerprint ${meta && meta.fingerprint ? meta.fingerprint : "n/a"} · Request ${meta && meta.requestId ? meta.requestId : "n/a"}</div>
     ${issuesHtml}
     ${recsHtml}
   `;
@@ -731,9 +804,48 @@ function bind(el, event, handler) {
   return true;
 }
 
+function shouldUseNativeShareForDownload() {
+  const ua = navigator.userAgent || "";
+  const isiOS = /iPhone|iPad|iPod/i.test(ua);
+  const isMacTouch = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isiOS || isMacTouch;
+}
+
+function setMobileNavOpen(open) {
+  if (!els.header || !els.navToggle) return;
+  const isOpen = Boolean(open);
+  els.header.classList.toggle("nav-open", isOpen);
+  els.navToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+}
+
 /* ---------- event listeners setup ---------- */
 function setupEventListeners() {
   if (listenersBound) return;
+
+  if (els.navToggle && els.navLinks && els.header) {
+    bind(els.navToggle, "click", () => {
+      const openNow = !els.header.classList.contains("nav-open");
+      setMobileNavOpen(openNow);
+    });
+
+    els.navAnchors.forEach((link) => {
+      bind(link, "click", () => setMobileNavOpen(false));
+    });
+
+    bind(document, "click", (e) => {
+      if (!els.header.classList.contains("nav-open")) return;
+      if (els.header.contains(e.target)) return;
+      setMobileNavOpen(false);
+    });
+
+    bind(document, "keydown", (e) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    });
+
+    bind(window, "resize", () => {
+      if (window.innerWidth > 900) setMobileNavOpen(false);
+    });
+  }
 
   if (!els.fileInput || !els.dropzone || !els.startCam || !els.capture || !els.stopCam) {
     console.error("Critical UI elements are missing. Event listeners were not attached.");
@@ -934,12 +1046,65 @@ function setupEventListeners() {
   });
 
   bind(els.downloadBtn, "click", () => {
-    const link = document.createElement("a");
     const code = els.country.value.toLowerCase();
     const doc = els.doc.value.toLowerCase();
-    link.download = `snapitid-${code}-${doc}.jpg`;
-    link.href = els.outputCanvas.toDataURL("image/jpeg", 0.95);
-    link.click();
+    const filename = `snapitid-${code}-${doc}.jpg`;
+
+    const exportBlobFromSnapshot = () => {
+      if (!state.lastProcessedDataURL || typeof state.lastProcessedDataURL !== "string") return null;
+      try {
+        const parts = state.lastProcessedDataURL.split(",");
+        if (parts.length < 2) return null;
+        const mimeMatch = parts[0].match(/data:(.*?);base64/);
+        const mime = (mimeMatch && mimeMatch[1]) || "image/jpeg";
+        const binary = atob(parts[1]);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        return new Blob([bytes], { type: mime });
+      } catch (_err) {
+        return null;
+      }
+    };
+
+    const snapshotBlob = exportBlobFromSnapshot();
+    if (snapshotBlob) {
+      void handleDownloadBlob(snapshotBlob);
+      return;
+    }
+
+    els.outputCanvas.toBlob(async (blob) => {
+      if (!blob) { setStatus("Could not export image.", "err"); return; }
+      await handleDownloadBlob(blob);
+    }, "image/jpeg", 0.95);
+
+    async function handleDownloadBlob(blob) {
+
+      // iOS Safari ignores <a download> for data/blob URLs.
+      // Use the Web Share API instead so the user gets a native share sheet
+      // with "Save Image" / "Save to Photos" as an option.
+      if (shouldUseNativeShareForDownload() && navigator.share && navigator.canShare) {
+        const file = new File([blob], filename, { type: "image/jpeg" });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: "SnapItID Passport Photo" });
+          } catch (e) {
+            if (e.name !== "AbortError") setStatus("Share failed: " + e.message, "err");
+          }
+          return;
+        }
+      }
+
+      // Desktop / Android fallback: blob-URL anchor (works where <a download> is supported).
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
   });
 
   bind(els.lang, "change", () => {
@@ -982,6 +1147,19 @@ function loadFromDataURL(url) {
   const img = new Image();
   img.crossOrigin = "anonymous";
   img.onload = () => {
+    // Reset derived output state so checks cannot run on a previous image.
+    state.lastProcessedDataURL = null;
+    state.lastProcessedRawDataURL = null;
+    state.lastOutputKind = null;
+    state.lastEnhancedRawDataURL = null;
+    if (els.downloadBtn) els.downloadBtn.disabled = true;
+    if (els.checkBtn) els.checkBtn.disabled = true;
+    if (els.enhanceBtn) els.enhanceBtn.disabled = true;
+    if (els.complianceReport) {
+      els.complianceReport.hidden = true;
+      els.complianceReport.textContent = "";
+    }
+
     state.sourceImage = img;
     els.originalImg.src = url;
     els.originalImg.parentElement.classList.add("has-content");
@@ -1043,8 +1221,8 @@ async function detectFaceBoundsFromCanvas(canvas) {
     // Expand face box to approximate full head bounds (hair + chin + ears).
     // FaceDetector typically returns from forehead to chin, so we extend a bit
     // upward for hair and slightly downward for chin/jaw.
-    const top = Math.max(0, Math.floor(bb.y - bb.height * 0.3));
-    const bottom = Math.min(canvas.height - 1, Math.ceil(bb.y + bb.height * 1.15));
+    const top = Math.max(0, Math.floor(bb.y - bb.height * 0.26));
+    const bottom = Math.min(canvas.height - 1, Math.ceil(bb.y + bb.height * 1.06));
     const left = Math.max(0, Math.floor(bb.x - bb.width * 0.2));
     const right = Math.min(canvas.width - 1, Math.ceil(bb.x + bb.width * 1.2));
 
@@ -1234,10 +1412,14 @@ async function processPhoto() {
       pCtx.globalCompositeOperation = "destination-in";
       pCtx.drawImage(maskCanvas, 0, 0);
       pCtx.globalCompositeOperation = "source-over";
-      outCtx.drawImage(personCanvas, transform.dx, transform.dy, transform.drawW, transform.drawH);
+      const biasX = outW * 0.035;
+      const biasY = outH * 0.03;
+      outCtx.drawImage(personCanvas, transform.dx + biasX, transform.dy + biasY, transform.drawW, transform.drawH);
     } else {
       // No segmentation: just draw cropped/scaled source over background (won't replace bg)
-      outCtx.drawImage(work, transform.dx, transform.dy, transform.drawW, transform.drawH);
+      const biasX = outW * 0.035;
+      const biasY = outH * 0.03;
+      outCtx.drawImage(work, transform.dx + biasX, transform.dy + biasY, transform.drawW, transform.drawH);
     }
 
     els.outputCanvas.parentElement.classList.add("has-content");
@@ -1247,6 +1429,9 @@ async function processPhoto() {
       (maskCanvas ? " · background replaced" : " · background not replaced (AI unavailable)");
 
     state.lastProcessedDataURL = outCanvas.toDataURL("image/jpeg", 0.95);
+    state.lastProcessedRawDataURL = state.lastProcessedDataURL;
+    state.lastOutputKind = "processed";
+    state.lastEnhancedRawDataURL = null;
     els.downloadBtn.disabled = false;
     if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
     if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase;

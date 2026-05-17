@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="images/SnapItID.png">
   <title>SnapItID | AI Passport &amp; Visa Photo Studio</title>
   <meta name="description" content="Upload or capture a photo and get a compliant passport or visa image for any country in seconds. AI-powered background removal, country-locked compliance, 300 DPI ready-to-print output.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260517-24">
 </head>
 <body>
   <!-- ambient brand glows -->
@@ -26,7 +27,12 @@
         </span>
         <span class="brand-name">SnapItID<span class="brand-dot">.ai</span></span>
       </a>
-      <div class="nav-links">
+      <button type="button" id="navToggle" class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="navLinks">
+        <span class="nav-toggle-line"></span>
+        <span class="nav-toggle-line"></span>
+        <span class="nav-toggle-line"></span>
+      </button>
+      <div class="nav-links" id="navLinks">
         <a href="#studio" id="navStudio">Studio</a>
         <a href="#how" id="navHow">How it works</a>
         <a href="#examples" id="navExamples">Examples</a>
@@ -192,14 +198,14 @@
                   <p class="preview-label" id="originalLabel">Original</p>
                   <div class="preview-frame">
                     <img id="originalPreview" alt="Original photo preview">
-                    <span id="originalPlaceholder" class="placeholder">No photo yet</span>
+                    <span id="originalPlaceholder" class="placeholder" data-i18n="noPhotoYet">No photo yet</span>
                   </div>
                 </div>
                 <div class="preview-block">
                   <p class="preview-label" id="compliantLabel">Compliant photo</p>
                   <div class="preview-frame">
                     <canvas id="outputCanvas"></canvas>
-                    <span id="outputPlaceholder" class="placeholder">Awaiting input</span>
+                    <span id="outputPlaceholder" class="placeholder" data-i18n="awaitingInput">Awaiting input</span>
                   </div>
                   <div class="output-meta" id="outputMeta"></div>
                 </div>
@@ -219,7 +225,7 @@
                   <input id="offsetX" type="range" min="-0.3" max="0.3" step="0.005" value="0">
                 </div>
                 <div class="control">
-                  <label for="bgColor">Background <span class="muted-tag">(fixed by rule)</span></label>
+                  <label for="bgColor"><span id="bgColorLabel">Background</span> <span id="bgColorFixed" class="muted-tag">(fixed by rule)</span></label>
                   <input id="bgColor" type="color" value="#ffffff" disabled>
                 </div>
               </div>
@@ -267,8 +273,8 @@
           <div class="how-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
           </div>
-          <h3>Capture or upload</h3>
-          <p>Use your phone or laptop camera, or upload a photo. We pull live country rules from our Cloudflare Worker.</p>
+          <h3 id="how1Title">Capture or upload</h3>
+          <p id="how1Desc">Use your phone or laptop camera, or upload a photo. We pull live country rules from our Cloudflare Worker.</p>
         </div>
 
         <div class="how-card">
@@ -276,8 +282,8 @@
           <div class="how-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M4.93 4.93l2.12 2.12"></path><path d="M16.95 16.95l2.12 2.12"></path><path d="M2 12h3"></path><path d="M19 12h3"></path><path d="M4.93 19.07l2.12-2.12"></path><path d="M16.95 7.05l2.12-2.12"></path></svg>
           </div>
-          <h3>AI background removal</h3>
-          <p>An on-device segmentation model isolates your head and shoulders, then composites onto the required background color.</p>
+          <h3 id="how2Title">AI background removal</h3>
+          <p id="how2Desc">An on-device segmentation model isolates your head and shoulders, then composites onto the required background color.</p>
         </div>
 
         <div class="how-card">
@@ -285,8 +291,8 @@
           <div class="how-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           </div>
-          <h3>ICAO compliance check</h3>
-          <p>Our vision model inspects head pose, expression, glare, and background — and gives you a compliance score with fixes.</p>
+          <h3 id="how3Title">ICAO compliance check</h3>
+          <p id="how3Desc">Our vision model inspects head pose, expression, glare, and background — and gives you a compliance score with fixes.</p>
         </div>
       </div>
     </section>
@@ -302,13 +308,13 @@
       <div class="examples-grid">
         <figure class="example-card">
           <div class="example-tag">Before</div>
-          <img src="examples/beforeImage.png" alt="Before: webcam selfie with glasses and cluttered background" loading="lazy">
-          <figcaption>Webcam selfie. Glasses on. Dim indoor lighting. Cluttered background.</figcaption>
+          <img src="examples/before.jpg" alt="Before: original portrait photo with glasses and grey background" loading="lazy">
+          <figcaption>Original photo. Glasses on. Grey background. Not passport-compliant.</figcaption>
         </figure>
         <figure class="example-card">
           <div class="example-tag tag-after">After</div>
-          <img src="examples/SnapItID.png" alt="After: AI-enhanced passport photo with glasses removed and white background" loading="lazy">
-          <figcaption>One click on AI Enhance. Glasses removed, pure-white background, 35 × 45 mm @ 300 DPI.</figcaption>
+          <img src="examples/After.jpg" alt="After: AI-enhanced passport photo, glasses removed, pure white background" loading="lazy">
+          <figcaption>After AI Enhance. Glasses removed, pure-white background, 35 × 45 mm @ 300 DPI.</figcaption>
         </figure>
       </div>
 
@@ -327,33 +333,33 @@
       <div class="feat-grid">
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg></div>
-          <h4>Cloud rule engine</h4>
-          <p>Country-specific sizes, backgrounds, and presentation rules served from Cloudflare Workers.</p>
+          <h4 id="feat1Title">Cloud rule engine</h4>
+          <p id="feat1Desc">Country-specific sizes, backgrounds, and presentation rules served from Cloudflare Workers.</p>
         </article>
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 7v6c0 5 4 9 8 9s8-4 8-9V7l-8-5z"></path></svg></div>
-          <h4>Locked compliance</h4>
-          <p>Background color is fixed by the rule — no way to accidentally pick the wrong shade.</p>
+          <h4 id="feat2Title">Locked compliance</h4>
+          <p id="feat2Desc">Background color is fixed by the rule — no way to accidentally pick the wrong shade.</p>
         </article>
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg></div>
-          <h4>Offline fallback</h4>
-          <p>If the API is unreachable, built-in country rules keep you working without interruption.</p>
+          <h4 id="feat3Title">Offline fallback</h4>
+          <p id="feat3Desc">If the API is unreachable, built-in country rules keep you working without interruption.</p>
         </article>
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"></path><path d="M3 9h18"></path><path d="M9 21V9"></path></svg></div>
-          <h4>Print-ready output</h4>
-          <p>Exact mm dimensions @ 300 DPI for both passport and visa photo formats.</p>
+          <h4 id="feat4Title">Print-ready output</h4>
+          <p id="feat4Desc">Exact mm dimensions @ 300 DPI for both passport and visa photo formats.</p>
         </article>
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-          <h4>ICAO checks</h4>
-          <p>AI vision model validates face, eyes, expression, glare, head covering, and uniform background.</p>
+          <h4 id="feat5Title">ICAO checks</h4>
+          <p id="feat5Desc">AI vision model validates face, eyes, expression, glare, head covering, and uniform background.</p>
         </article>
         <article class="feat-card">
           <div class="feat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
-          <h4>Privacy first</h4>
-          <p>Photo segmentation runs on your device. Compliance checks only happen when you click the button.</p>
+          <h4 id="feat6Title">Privacy first</h4>
+          <p id="feat6Desc">Photo segmentation runs on your device. Compliance checks only happen when you click the button.</p>
         </article>
       </div>
     </section>
@@ -374,6 +380,6 @@
   <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
-  <script type="module" src="app.js?v=20260517-10"></script>
+  <script type="module" src="app.js?v=20260517-27"></script>
 </body>
 </html>

@@ -45,6 +45,25 @@ export const COUNTRY_FRAMING_PROFILES = {
   VN: { passport: { targetHeadRatio: 0.58, minHeadRatio: 0.54, maxHeadRatio: 0.64, topSpaceRatio: 0.1, sideSpaceRatio: 0.08 }, visa: { targetHeadRatio: 0.56, minHeadRatio: 0.52, maxHeadRatio: 0.62, topSpaceRatio: 0.1, sideSpaceRatio: 0.08 } },
 };
 
+function getStandardProfileForSize(size) {
+  if (!size || !size.width || !size.height) return null;
+
+  // 35x45mm standard: chin-to-crown 32-36mm, crown top spacing around 3-5mm.
+  const w = Number(size.width);
+  const h = Number(size.height);
+  const is35x45 = Math.abs(w - 35) <= 0.6 && Math.abs(h - 45) <= 0.6;
+  if (!is35x45) return null;
+
+  return {
+    targetHeadRatio: 34 / 45,
+    minHeadRatio: 32 / 45,
+    maxHeadRatio: 36 / 45,
+    topSpaceRatio: 4 / 45,
+    minTopSpaceRatio: 3 / 45,
+    maxTopSpaceRatio: 5 / 45,
+  };
+}
+
 // Merge the default profile with a country/document override and any
 // rule-derived head ratio (when the country specifies an absolute head height
 // in mm rather than a ratio).
@@ -62,6 +81,19 @@ export function getFramingProfile(countryCode, documentType, size) {
     ...DEFAULT_FRAMING_PROFILE,
     ...(override || {}),
   };
+
+  const standardProfile = getStandardProfileForSize(size);
+  if (standardProfile) {
+    // Enforce strict 35x45 compliance envelope regardless of legacy country
+    // table values that may use an older, smaller head-size interpretation.
+    merged.targetHeadRatio = standardProfile.targetHeadRatio;
+    merged.minHeadRatio = standardProfile.minHeadRatio;
+    merged.maxHeadRatio = standardProfile.maxHeadRatio;
+    merged.topSpaceRatio = standardProfile.topSpaceRatio;
+    merged.minTopSpaceRatio = standardProfile.minTopSpaceRatio;
+    merged.maxTopSpaceRatio = standardProfile.maxTopSpaceRatio;
+    return merged;
+  }
 
   if (!override || typeof override.targetHeadRatio !== "number") {
     merged.targetHeadRatio = ruleHeadRatio || merged.targetHeadRatio;
@@ -138,7 +170,7 @@ export function computeComplianceTransform(
   // worse than a slightly oversized head.
   if (fillOutput) {
     const coverScale = Math.max(outW / imageWidth, outH / imageHeight);
-    scale = Math.max(scale, coverScale);
+    scale = Math.min(maxScaleByHeadRatio, Math.max(scale, coverScale));
   }
 
   const drawW = imageWidth * scale;

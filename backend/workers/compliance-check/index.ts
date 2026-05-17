@@ -220,11 +220,14 @@ async function runComplianceAnalysis(
   const issues: ComplianceIssue[] = [];
 
   // Ask a vision-language model to assess ICAO-like passport photo compliance.
+  // Note: we keep the glasses question NEUTRAL — biased prompts caused frequent
+  // false positives, especially on AI-enhanced photos with strong eye contours.
   const prompt =
     `You are an ICAO-style passport photo compliance checker for ${countryCode} ${documentType}. ` +
-    `Look VERY carefully at the subject's eyes and face. ` +
-    `Glasses include: prescription eyeglasses, spectacles, reading glasses, sunglasses, or any eyewear with lenses and frames around the eyes. ` +
-    `Set "glasses" to true if you see ANY frames, rims, lenses, or temple arms around or on the eyes. When in doubt, set glasses to true. ` +
+    `Evaluate the photo objectively. ` +
+    `Set "glasses" to true ONLY if you can clearly see physical eyeglass frames, rims, lenses, ` +
+    `or temple arms on the face. Do NOT infer glasses from eye shape, eyelid creases, wrinkles, ` +
+    `eyebrows, or shadows. When unsure, set glasses to false. ` +
     `Reply ONLY with compact JSON of the form ` +
     `{"face_detected":bool,"single_face":bool,"facing_forward":bool,"eyes_open":bool,` +
     `"neutral_expression":bool,"mouth_closed":bool,"glasses":bool,"glasses_glare":bool,` +
@@ -250,6 +253,35 @@ async function runComplianceAnalysis(
       category: 'AI_SERVICE',
       description: 'AI vision model unavailable: ' + (err instanceof Error ? err.message : 'unknown'),
     });
+  }
+
+  // Second-opinion pass for glasses: only confirm a glasses flag if a focused
+  // yes/no question also says yes. This eliminates the dominant false-positive
+  // pattern we saw where the model flagged glasses on clean enhanced photos.
+  if (parsed && asBool(parsed.glasses, false)) {
+    try {
+      const confirmResp: any = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+        image: Array.from(imageData),
+        prompt:
+          'Look at this face. Are there any physical eyeglasses, spectacles, sunglasses, or ' +
+          'eyewear with visible frames, rims, lenses, or temple arms on or in front of the eyes? ' +
+          'Answer ONLY with the single word YES or NO.',
+        max_tokens: 8,
+      });
+      const confirmText: string = typeof confirmResp === 'string'
+        ? confirmResp
+        : (confirmResp?.description ?? confirmResp?.response ?? confirmResp?.text ?? '');
+      const confirmed = /\byes\b/i.test(confirmText) && !/\bno\b/i.test(confirmText);
+      if (!confirmed) {
+        parsed.glasses = false;
+        parsed.glasses_glare = false;
+      }
+    } catch {
+      // If confirmation fails, be conservative and drop the glasses flag to
+      // avoid blocking otherwise compliant photos on a single shaky signal.
+      parsed.glasses = false;
+      parsed.glasses_glare = false;
+    }
   }
 
   if (parsed) {

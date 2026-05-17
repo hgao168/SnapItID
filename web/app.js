@@ -19,6 +19,7 @@ const els = {
   navLinks: document.getElementById("navLinks"),
   navAnchors: document.querySelectorAll(".nav-links a[href^='#']"),
   navSignIn: document.getElementById("navSignIn"),
+  navProfile: document.getElementById("navProfile"),
   navCta: document.getElementById("navCta"),
   logoutBtn: document.getElementById("logoutBtn"),
   accountSection: document.getElementById("accountSection"),
@@ -251,6 +252,7 @@ function syncAuthNav() {
   const token = getAuthToken();
 
   if (els.logoutBtn) els.logoutBtn.style.display = token ? "inline-block" : "none";
+  if (els.navProfile) els.navProfile.style.display = token ? "inline-block" : "none";
   if (els.navSignIn) els.navSignIn.style.display = token ? "none" : "inline-block";
   if (els.navCta) els.navCta.style.display = token ? "inline-block" : "none";
 }

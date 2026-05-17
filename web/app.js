@@ -354,11 +354,7 @@ function logoutUser() {
   localStorage.removeItem("snapitid_pending_upgrade_plan");
   state.currentUser = null;
   state.billingPlan = "free";
-  renderAccountPanel();
-  syncAuthNav();
-  applyCountryGateUI();
-  updateUnlockCtaVisibility();
-  setStatus("Signed out.", "ok");
+  window.location.href = "/";
 }
 
 function getPendingUpgradePlan() {

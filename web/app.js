@@ -18,6 +18,17 @@ const els = {
   navToggle: document.getElementById("navToggle"),
   navLinks: document.getElementById("navLinks"),
   navAnchors: document.querySelectorAll(".nav-links a[href^='#']"),
+  navSignIn: document.getElementById("navSignIn"),
+  navCta: document.getElementById("navCta"),
+  logoutBtn: document.getElementById("logoutBtn"),
+  accountSection: document.getElementById("accountSection"),
+  accountTierBadge: document.getElementById("accountTierBadge"),
+  accountName: document.getElementById("accountName"),
+  accountEmail: document.getElementById("accountEmail"),
+  accountPlanValue: document.getElementById("accountPlanValue"),
+  accountUpgradeCopy: document.getElementById("accountUpgradeCopy"),
+  accountUpgradeProBtn: document.getElementById("accountUpgradeProBtn"),
+  accountUpgradeLifetimeBtn: document.getElementById("accountUpgradeLifetimeBtn"),
   engineStatus: document.getElementById("engine-status"),
   lang: document.getElementById("langSelect"),
   country: document.getElementById("countrySelect"),
@@ -45,9 +56,15 @@ const els = {
   enhanceHint: document.getElementById("enhanceHint"),
   checkBtn: document.getElementById("checkBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
+  unlockHdBtn: document.getElementById("unlockHdBtn"),
   status: document.getElementById("statusLine"),
   complianceReport: document.getElementById("complianceReport"),
   endpointInfo: document.getElementById("endpointInfo"),
+  payButtons: document.querySelectorAll(".pay-btn"),
+  wechatModal: document.getElementById("wechatModal"),
+  wechatModalBackdrop: document.getElementById("wechatModalBackdrop"),
+  wechatQrImage: document.getElementById("wechatQrImage"),
+  wechatCloseBtn: document.getElementById("wechatCloseBtn"),
 };
 
 const state = {
@@ -65,6 +82,23 @@ const state = {
   lastProcessedRawDataURL: null,
   lastOutputKind: null,  // "processed" or "enhanced"
   lastEnhancedRawDataURL: null,
+  billingPlan: "free",  // free | single | pro | lifetime
+  currentUser: null,
+};
+
+const FREE_COUNTRY_CODES = new Set(["US", "GB", "CA", "AU", "SG", "DE"]);
+
+const PLAN_LABELS = {
+  free: "Free",
+  single: "Single Export",
+  pro: "Pro Monthly",
+  lifetime: "Lifetime",
+};
+
+const PROVIDER_LABELS = {
+  stripe: "Stripe",
+  paypal: "PayPal",
+  wechat: "WeChat",
 };
 
 let listenersBound = false;
@@ -169,6 +203,416 @@ function backgroundLabel(bgKey) {
   if (key === "LIGHT_NEUTRAL") return tr("bgLightNeutral");
   if (key === "LIGHT_GREY") return tr("bgLightGrey");
   return key.replace(/_/g, " ");
+}
+
+function isPaidPlan() {
+  return state.billingPlan !== "free";
+}
+
+function isPremiumCountry(code) {
+  return !FREE_COUNTRY_CODES.has(String(code || "").toUpperCase());
+}
+
+function canUseSelectedCountry() {
+  if (isPaidPlan()) return true;
+  return !isPremiumCountry(els.country && els.country.value);
+}
+
+function canUseHdExport() {
+  return isPaidPlan();
+}
+
+function getPaymentCheckoutUrl(provider, plan) {
+  const base = state.apiBase || window.location.origin;
+  const q = new URLSearchParams({
+    provider,
+    plan,
+    country: (els.country && els.country.value) || "US",
+    docType: (els.doc && els.doc.value) || "PASSPORT",
+    success_url: `${window.location.origin}${window.location.pathname}?billing=success&plan=${plan}`,
+    cancel_url: `${window.location.origin}${window.location.pathname}?billing=cancel`,
+  });
+  return `${base}/api/payments/checkout?${q.toString()}`;
+}
+
+function getAuthToken() {
+  return localStorage.getItem("snapitid_token") || "";
+}
+
+function clearAuthStorage() {
+  localStorage.removeItem("snapitid_token");
+  localStorage.removeItem("snapitid_user_id");
+  localStorage.removeItem("snapitid_user_email");
+  localStorage.removeItem("snapitid_user_name");
+  localStorage.removeItem("snapitid_plan");
+}
+
+function syncAuthNav() {
+  const token = getAuthToken();
+
+  if (els.logoutBtn) els.logoutBtn.style.display = token ? "inline-block" : "none";
+  if (els.navSignIn) els.navSignIn.style.display = token ? "none" : "inline-block";
+  if (els.navCta) els.navCta.style.display = token ? "inline-block" : "none";
+}
+
+function renderAccountPanel() {
+  if (!els.accountSection) return;
+
+  const user = state.currentUser;
+  const tier = user?.tier || state.billingPlan || "free";
+  state.billingPlan = tier;
+
+  if (!user || !getAuthToken()) {
+    els.accountSection.hidden = true;
+    return;
+  }
+
+  els.accountSection.hidden = false;
+
+  if (els.accountTierBadge) {
+    els.accountTierBadge.textContent = PLAN_LABELS[tier] || tier;
+    els.accountTierBadge.className = `pill${tier === "lifetime" ? " ok" : tier === "pro" ? " ok" : ""}`;
+  }
+
+  if (els.accountName) {
+    els.accountName.textContent = user.name || "SnapItID User";
+  }
+  if (els.accountEmail) {
+    els.accountEmail.textContent = user.email || "";
+  }
+  if (els.accountPlanValue) {
+    els.accountPlanValue.textContent = PLAN_LABELS[tier] || tier;
+  }
+
+  if (els.accountUpgradeProBtn) {
+    const canShowPro = tier === "free";
+    els.accountUpgradeProBtn.hidden = !canShowPro;
+    els.accountUpgradeProBtn.disabled = !canShowPro;
+  }
+
+  if (els.accountUpgradeLifetimeBtn) {
+    const canShowLifetime = tier === "free" || tier === "pro";
+    els.accountUpgradeLifetimeBtn.hidden = !canShowLifetime;
+    els.accountUpgradeLifetimeBtn.disabled = !canShowLifetime;
+  }
+
+  if (els.accountUpgradeCopy) {
+    if (tier === "free") {
+      els.accountUpgradeCopy.textContent = "Free accounts can upgrade to Pro Monthly or Lifetime.";
+    } else if (tier === "pro") {
+      els.accountUpgradeCopy.textContent = "Pro accounts can upgrade to Lifetime at any time.";
+    } else {
+      els.accountUpgradeCopy.textContent = "Lifetime access is active on your account.";
+    }
+  }
+}
+
+async function refreshAuthenticatedUser() {
+  const token = getAuthToken();
+  syncAuthNav();
+
+  if (!token) {
+    state.currentUser = null;
+    renderAccountPanel();
+    return null;
+  }
+
+  try {
+    const base = state.apiBase || window.location.origin;
+    const payload = await fetchJSON(`${base}/api/payments/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const user = unwrapApiResult(payload);
+    if (!user || !user.id) {
+      throw new Error("Could not load user profile");
+    }
+
+    state.currentUser = user;
+    state.billingPlan = user.tier || "free";
+    localStorage.setItem("snapitid_user_id", user.id);
+    if (user.email) localStorage.setItem("snapitid_user_email", user.email);
+    if (user.name) localStorage.setItem("snapitid_user_name", user.name);
+    localStorage.setItem("snapitid_plan", state.billingPlan);
+    renderAccountPanel();
+    return user;
+  } catch (err) {
+    clearAuthStorage();
+    state.currentUser = null;
+    state.billingPlan = "free";
+    renderAccountPanel();
+    syncAuthNav();
+    if (err instanceof Error && !/401|403|invalid token|unauthorized/i.test(err.message)) {
+      setStatus("Could not load your account profile.", "err");
+    }
+    return null;
+  }
+}
+
+function logoutUser() {
+  clearAuthStorage();
+  localStorage.removeItem("snapitid_pending_pay_id");
+  localStorage.removeItem("snapitid_pending_upgrade_plan");
+  state.currentUser = null;
+  state.billingPlan = "free";
+  renderAccountPanel();
+  syncAuthNav();
+  applyCountryGateUI();
+  updateUnlockCtaVisibility();
+  setStatus("Signed out.", "ok");
+}
+
+function getPendingUpgradePlan() {
+  const plan = localStorage.getItem("snapitid_pending_upgrade_plan") || "";
+  return plan === "pro" || plan === "lifetime" ? plan : null;
+}
+
+function redirectToLoginForUpgrade(plan) {
+  if (plan !== "pro" && plan !== "lifetime") return;
+  localStorage.setItem("snapitid_pending_upgrade_plan", plan);
+  window.location.href = `/login.html?upgrade=${encodeURIComponent(plan)}`;
+}
+
+function canUpgradeTo(plan) {
+  if (plan !== "pro" && plan !== "lifetime") return true;
+
+  const currentPlan = localStorage.getItem("snapitid_plan") || state.billingPlan;
+  if (currentPlan === "lifetime") {
+    setStatus("Your account already has Lifetime access.", "err");
+    localStorage.removeItem("snapitid_pending_upgrade_plan");
+    return false;
+  }
+
+  if (currentPlan === plan) {
+    setStatus(`Your account is already on ${PLAN_LABELS[plan]}.`, "err");
+    localStorage.removeItem("snapitid_pending_upgrade_plan");
+    return false;
+  }
+
+  return true;
+}
+
+function showPendingUpgradePrompt() {
+  const params = new URLSearchParams(window.location.search || "");
+  const requestedPlan = params.get("upgrade");
+  const plan = requestedPlan === "pro" || requestedPlan === "lifetime"
+    ? requestedPlan
+    : getPendingUpgradePlan();
+
+  if (!plan || !getAuthToken()) return;
+  if (!canUpgradeTo(plan)) return;
+
+  localStorage.setItem("snapitid_pending_upgrade_plan", plan);
+  setStatus(`You are signed in. Choose ${PLAN_LABELS[plan]} below to complete your upgrade.`, "ok");
+
+  const pricingSection = document.getElementById("pricing");
+  if (pricingSection && window.location.search.includes("upgrade=")) {
+    requestAnimationFrame(() => {
+      pricingSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+}
+
+async function startPaymentCheckout(provider, plan) {
+  const base = state.apiBase || window.location.origin;
+  try {
+    const token = getAuthToken();
+    const userId = (localStorage.getItem("snapitid_user_id") || "").trim();
+
+    if ((plan === "pro" || plan === "lifetime") && !token) {
+      setStatus(`Please sign in before upgrading to ${PLAN_LABELS[plan]}.`, "err");
+      redirectToLoginForUpgrade(plan);
+      return null;
+    }
+
+    if (!canUpgradeTo(plan)) {
+      return null;
+    }
+
+    const q = new URLSearchParams({
+      provider,
+      plan,
+      country: (els.country && els.country.value) || "US",
+      docType: (els.doc && els.doc.value) || "PASSPORT",
+      success_url: `${window.location.origin}${window.location.pathname}?billing=success&plan=${plan}`,
+      cancel_url: `${window.location.origin}${window.location.pathname}?billing=cancel`,
+      redirect: "0",
+    });
+
+    if (userId) {
+      q.set("user_id", userId);
+    }
+
+    const url = `${base}/api/payments/checkout?${q.toString()}`;
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+    const data = await fetchJSON(url, headers ? { headers } : undefined);
+    const result = unwrapApiResult(data);
+    if (result && result.id && result.checkoutUrl) {
+      localStorage.setItem("snapitid_pending_pay_id", result.id);
+      if (plan === "pro" || plan === "lifetime") {
+        localStorage.setItem("snapitid_pending_upgrade_plan", plan);
+      }
+      window.open(result.checkoutUrl, "_blank", "noopener,noreferrer");
+      return result;
+    }
+  } catch (err) {
+    if ((plan === "pro" || plan === "lifetime") && /log in|unauthorized|invalid token/i.test(err.message || "")) {
+      setStatus(`Please sign in again before upgrading to ${PLAN_LABELS[plan]}.`, "err");
+      localStorage.removeItem("snapitid_token");
+      redirectToLoginForUpgrade(plan);
+      return null;
+    }
+    setStatus("Could not start checkout: " + err.message, "err");
+  }
+  return null;
+}
+
+async function pollPaymentStatus(payId, { maxAttempts = 20, intervalMs = 3000 } = {}) {
+  const base = state.apiBase || window.location.origin;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const data = await fetchJSON(`${base}/api/payments/status?id=${encodeURIComponent(payId)}`);
+      const result = unwrapApiResult(data);
+      if (result && result.status && result.status !== "pending") {
+        return result;
+      }
+    } catch (_err) {
+      // ignore and retry
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return null;
+}
+
+function closeWechatModal() {
+  if (els.wechatModal) els.wechatModal.hidden = true;
+}
+
+function openWechatModal(plan) {
+  if (!els.wechatModal || !els.wechatQrImage) return;
+  const checkoutUrl = getPaymentCheckoutUrl("wechat", plan);
+  const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(checkoutUrl)}`;
+  els.wechatQrImage.src = qrApi;
+  els.wechatModal.hidden = false;
+}
+
+function applyBillingFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const billing = params.get("billing");
+    const plan = params.get("plan");
+    const payId = params.get("pay_id") || localStorage.getItem("snapitid_pending_pay_id");
+
+    if (billing === "success" && payId) {
+      setStatus("Confirming payment with backend…", "ok");
+      pollPaymentStatus(payId).then((result) => {
+        if (result && result.status === "paid" && PLAN_LABELS[result.plan] && result.plan !== "free") {
+          state.billingPlan = result.plan;
+          localStorage.setItem("snapitid_plan", result.plan);
+          if (result.userId) {
+            localStorage.setItem("snapitid_user_id", result.userId);
+          }
+          localStorage.removeItem("snapitid_pending_pay_id");
+          localStorage.removeItem("snapitid_pending_upgrade_plan");
+          setStatus(`Payment confirmed. ${PLAN_LABELS[result.plan]} unlocked.`, "ok");
+          applyCountryGateUI();
+          updateUnlockCtaVisibility();
+          refreshAuthenticatedUser();
+          if (els.downloadBtn && state.lastProcessedDataURL) {
+            els.downloadBtn.disabled = false;
+          }
+        } else {
+          setStatus("Could not confirm payment yet. Refresh in a moment to retry.", "err");
+        }
+      });
+    } else if (billing === "success" && PLAN_LABELS[plan] && plan !== "free") {
+      // Backwards-compatible path when pay_id is absent.
+      state.billingPlan = plan;
+      localStorage.setItem("snapitid_plan", plan);
+      localStorage.removeItem("snapitid_pending_upgrade_plan");
+      setStatus(`Payment confirmed. ${PLAN_LABELS[plan]} unlocked.`, "ok");
+      refreshAuthenticatedUser();
+    } else if (billing === "cancel") {
+      setStatus("Checkout cancelled.", "err");
+      localStorage.removeItem("snapitid_pending_pay_id");
+    }
+  } catch (_err) {
+    // ignore malformed query strings
+  }
+}
+
+function loadBillingPlan() {
+  const saved = localStorage.getItem("snapitid_plan");
+  if (saved && PLAN_LABELS[saved]) {
+    state.billingPlan = saved;
+  } else {
+    state.billingPlan = "free";
+  }
+}
+
+function updateUnlockCtaVisibility() {
+  if (!els.unlockHdBtn) return;
+  const hasPhoto = !!state.lastProcessedDataURL;
+  const shouldShow = hasPhoto && !canUseHdExport();
+  els.unlockHdBtn.hidden = !shouldShow;
+}
+
+function applyCountryGateUI() {
+  const allowed = canUseSelectedCountry();
+  if (els.country) {
+    Array.from(els.country.options || []).forEach((opt) => {
+      const premium = isPremiumCountry(opt.value);
+      opt.disabled = premium && !isPaidPlan();
+      if (premium && !opt.text.includes("(PRO)")) opt.text += " (PRO)";
+      if (!premium) opt.text = opt.text.replace(" (PRO)", "");
+    });
+    if (!allowed) {
+      // Move free users back to the first available free country.
+      const fallback = Array.from(els.country.options || []).find((o) => !o.disabled);
+      if (fallback) {
+        els.country.value = fallback.value;
+      }
+    }
+  }
+}
+
+function createFreePreviewBlob() {
+  const src = els.outputCanvas;
+  if (!src || !src.width || !src.height) return null;
+
+  const maxW = 900;
+  const scale = Math.min(1, maxW / src.width);
+  const outW = Math.max(1, Math.round(src.width * scale));
+  const outH = Math.max(1, Math.round(src.height * scale));
+
+  const c = document.createElement("canvas");
+  c.width = outW;
+  c.height = outH;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(src, 0, 0, outW, outH);
+
+  // Watermark stripe + repeated diagonal text for free-tier preview protection.
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.fillRect(0, outH - Math.round(outH * 0.14), outW, Math.round(outH * 0.14));
+  ctx.font = `${Math.max(14, Math.round(outW * 0.03))}px Geist, sans-serif`;
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.textAlign = "center";
+  ctx.fillText("SnapItID FREE PREVIEW", outW / 2, outH - Math.round(outH * 0.05));
+
+  ctx.save();
+  ctx.translate(outW / 2, outH / 2);
+  ctx.rotate(-Math.PI / 6);
+  ctx.font = `${Math.max(16, Math.round(outW * 0.04))}px Geist, sans-serif`;
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  for (let y = -outH; y <= outH; y += Math.round(outH * 0.2)) {
+    for (let x = -outW; x <= outW; x += Math.round(outW * 0.42)) {
+      ctx.fillText("SNAPITID", x, y);
+    }
+  }
+  ctx.restore();
+
+  return new Promise((resolve) => {
+    c.toBlob((blob) => resolve(blob || null), "image/jpeg", 0.82);
+  });
 }
 
 // LOCAL_COUNTRY_RULES now lives in ./rules-data.js.
@@ -453,6 +897,10 @@ function updateEndpointInfo(err) {
 
 /* ---------- AI compliance check ---------- */
 async function runComplianceCheck() {
+  if (!canUseSelectedCountry()) {
+    setStatus("This country is premium-only. Upgrade to run AI compliance for this selection.", "err");
+    return;
+  }
   const snapshot = captureOutputSnapshotDataURL();
   const useEnhancedRaw = state.lastOutputKind === "enhanced" && !!state.lastEnhancedRawDataURL;
   const useProcessedRaw = state.lastOutputKind === "processed" && !!state.lastProcessedRawDataURL;
@@ -498,9 +946,14 @@ async function runComplianceCheck() {
         headCoverageAllowed: state.rules.headCoverageAllowed,
       } : undefined,
     };
+    const token = localStorage.getItem("snapitid_token");
+    const headers = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
     const response = await fetchJSON(`${state.apiBase}/api/compliance/check?t=${Date.now()}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
     const result = unwrapApiResult(response);
@@ -520,6 +973,10 @@ async function runComplianceCheck() {
 
 /* ---------- AI photo enhancement ---------- */
 async function runAIEnhance() {
+  if (!canUseSelectedCountry()) {
+    setStatus("This country is premium-only. Upgrade to run AI Enhance for this selection.", "err");
+    return;
+  }
   if (!state.lastProcessedDataURL) {
     setStatus("Process a photo first.", "err");
     return;
@@ -539,6 +996,7 @@ async function runAIEnhance() {
   setStatus("Enhancing photo with AI… this can take 10–30 seconds.");
 
   try {
+    const token = localStorage.getItem("snapitid_token");
     const payload = {
       countryCode: els.country.value,
       documentType: els.doc.value,
@@ -549,9 +1007,13 @@ async function runAIEnhance() {
         headCoverageAllowed: state.rules.headCoverageAllowed,
       } : undefined,
     };
+    const headers = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
     const response = await fetchJSON(`${state.apiBase}/api/compliance/enhance`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
     const result = unwrapApiResult(response);
@@ -660,9 +1122,9 @@ async function runAIEnhance() {
     state.lastProcessedDataURL = canvas.toDataURL("image/jpeg", 0.95);
     state.lastOutputKind = "enhanced";
     els.outputMeta.textContent =
-      `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI · enhanced by ${modelName}`;
+      `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI`;
     canvas.parentElement.classList.add("has-content");
-    setStatus(`AI enhancement complete (${modelName}). Review and download.`, "ok");
+    setStatus("AI enhancement complete. Review and download.", "ok");
   } catch (err) {
     console.error(err);
     setStatus("AI enhancement failed: " + err.message, "err");
@@ -844,6 +1306,49 @@ function setupEventListeners() {
 
     bind(window, "resize", () => {
       if (window.innerWidth > 900) setMobileNavOpen(false);
+    });
+  }
+
+  // Logout button and auth-based nav visibility
+  if (els.logoutBtn) {
+    bind(els.logoutBtn, "click", () => {
+      logoutUser();
+    });
+  }
+
+  syncAuthNav();
+
+  // Auth check for "Open Studio" button - redirect to login if needed
+  if (els.navCta) {
+    bind(els.navCta, "click", (e) => {
+      if (!getAuthToken()) {
+        e.preventDefault();
+        window.location.href = "/login.html";
+      }
+    });
+  }
+
+  // Also check auth when navigating to #studio via any link
+  document.querySelectorAll("a[href='#studio']").forEach((link) => {
+    bind(link, "click", (e) => {
+      if (!getAuthToken()) {
+        e.preventDefault();
+        window.location.href = "/login.html";
+      }
+    });
+  });
+
+  if (els.accountUpgradeProBtn) {
+    bind(els.accountUpgradeProBtn, "click", () => {
+      setStatus("Opening Stripe checkout for Pro Monthly…", "ok");
+      startPaymentCheckout("stripe", "pro");
+    });
+  }
+
+  if (els.accountUpgradeLifetimeBtn) {
+    bind(els.accountUpgradeLifetimeBtn, "click", () => {
+      setStatus("Opening Stripe checkout for Lifetime…", "ok");
+      startPaymentCheckout("stripe", "lifetime");
     });
   }
 
@@ -1031,7 +1536,10 @@ function setupEventListeners() {
   );
 
   bind(els.country, "change", () => {
-    loadRules().then(() => { if (state.sourceImage) processPhoto(); });
+    applyCountryGateUI();
+    loadRules().then(() => {
+      if (state.sourceImage) processPhoto();
+    });
   });
   bind(els.doc, "change", () => {
     renderRules();
@@ -1049,6 +1557,20 @@ function setupEventListeners() {
     const code = els.country.value.toLowerCase();
     const doc = els.doc.value.toLowerCase();
     const filename = `snapitid-${code}-${doc}.jpg`;
+
+    const continueWithBlob = async (blob) => {
+      if (!blob) {
+        setStatus("Could not export image.", "err");
+        return;
+      }
+      await handleDownloadBlob(blob);
+    };
+
+    if (!canUseHdExport()) {
+      setStatus("Free tier export: low-res preview with watermark. Upgrade for HD download and print sheet.", "ok");
+      createFreePreviewBlob().then(continueWithBlob);
+      return;
+    }
 
     const exportBlobFromSnapshot = () => {
       if (!state.lastProcessedDataURL || typeof state.lastProcessedDataURL !== "string") return null;
@@ -1107,6 +1629,34 @@ function setupEventListeners() {
     }
   });
 
+  els.payButtons.forEach((btn) => {
+    bind(btn, "click", () => {
+      const provider = btn.dataset.provider;
+      const plan = btn.dataset.plan;
+      if (!provider || !plan || !PLAN_LABELS[plan] || plan === "free") return;
+
+      if (provider === "wechat") {
+        openWechatModal(plan);
+        setStatus("Open WeChat and scan the QR code to continue payment.", "ok");
+        return;
+      }
+
+      setStatus(`Opening ${PROVIDER_LABELS[provider] || provider} checkout for ${PLAN_LABELS[plan]}\u2026`, "ok");
+      startPaymentCheckout(provider, plan);
+    });
+  });
+
+  bind(els.unlockHdBtn, "click", () => {
+    setStatus("Opening Stripe checkout to unlock HD export\u2026", "ok");
+    startPaymentCheckout("stripe", "single");
+  });
+
+  bind(els.wechatCloseBtn, "click", closeWechatModal);
+  bind(els.wechatModalBackdrop, "click", closeWechatModal);
+  bind(document, "keydown", (e) => {
+    if (e.key === "Escape") closeWechatModal();
+  });
+
   bind(els.lang, "change", () => {
     applyLanguage(els.lang.value);
   });
@@ -1116,6 +1666,12 @@ function setupEventListeners() {
 
 /* ---------- bootstrap ---------- */
 (async function init() {
+  // Don't require auth on home page - users can browse first
+  // Auth check happens when they click "Open Studio" (see scroll handler below)
+
+  loadBillingPlan();
+  applyBillingFromUrl();
+  showPendingUpgradePrompt();
   applyLanguage(preferredLanguage());
 
   if (location.protocol === "file:") {
@@ -1125,9 +1681,11 @@ function setupEventListeners() {
   // Bind user interactions immediately so upload/camera controls work
   // even if rules/model initialization is still in progress.
   setupEventListeners();
+  applyCountryGateUI();
 
   resizeOutputCanvasToSpec();
   await loadRules();
+  await refreshAuthenticatedUser();
   await initSegmenter();
   // Initialize face detector in parallel (don't await — it's optional).
   initFaceDetector();
@@ -1433,8 +1991,18 @@ async function processPhoto() {
     state.lastOutputKind = "processed";
     state.lastEnhancedRawDataURL = null;
     els.downloadBtn.disabled = false;
-    if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
-    if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase;
+    const countryAllowed = canUseSelectedCountry();
+    if (els.checkBtn) els.checkBtn.disabled = !state.apiBase || !countryAllowed;
+    if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase || !countryAllowed;
+    updateUnlockCtaVisibility();
+    if (!countryAllowed) {
+      setStatus("This country is premium-only. Upgrade to Single Export, Pro Monthly, or Lifetime to continue.", "err");
+      return;
+    }
+    if (!canUseHdExport()) {
+      setStatus("Done. Free tier includes low-res watermarked export. Upgrade for HD download and print sheet.", "ok");
+      return;
+    }
     setStatus(maskCanvas ? "Done. Compliance framing applied for head size and spacing." : "Done (no background removal - model unavailable).", "ok");
   } catch (err) {
     console.error(err);

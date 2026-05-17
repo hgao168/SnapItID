@@ -70,7 +70,8 @@ final class SnapItIDAPI {
         image: UIImage,
         countryCode: String,
         documentType: DocumentType,
-        rules: CountryRules?
+        rules: CountryRules?,
+        userId: String?
     ) async throws -> EnhanceResult {
         guard let jpeg = image.jpegData(compressionQuality: 0.9) else {
             throw APIError.encoding("Failed to JPEG-encode image")
@@ -81,7 +82,8 @@ final class SnapItIDAPI {
             countryCode: countryCode,
             documentType: documentType.rawValue,
             imageBase64: dataURL,
-            rules: rules.map(RulesPayload.init)
+            rules: rules.map(RulesPayload.init),
+            userId: userId
         )
 
         let url = baseURL.appendingPathComponent("/api/compliance/enhance")
@@ -94,6 +96,28 @@ final class SnapItIDAPI {
         try Self.ensureOK(response: response, data: data)
         let envelope = try Self.decoder.decode(APIEnvelope<EnhanceResult>.self, from: data)
         return envelope.result
+    }
+
+    // MARK: - User identity
+
+    /// Ensures we have a backend user id for tier-aware features.
+    /// Returns an existing/reused guest id when available, or creates a new guest user.
+    func ensureGuestUserId(existingUserId: String?) async -> String? {
+        let url = baseURL.appendingPathComponent("/api/payments/guest")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        let payload = GuestUserPayload(userId: existingUserId)
+        do {
+            req.httpBody = try Self.encoder.encode(payload)
+            let (data, response) = try await session.data(for: req)
+            try Self.ensureOK(response: response, data: data)
+            let envelope = try Self.decoder.decode(APIEnvelope<PaymentUserRecord>.self, from: data)
+            return envelope.result.id
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Helpers
@@ -128,6 +152,15 @@ private struct CompliancePayload: Encodable {
     let documentType: String
     let imageBase64: String
     let rules: RulesPayload?
+    let userId: String?
+}
+
+private struct GuestUserPayload: Encodable {
+    let userId: String?
+}
+
+private struct PaymentUserRecord: Decodable {
+    let id: String
 }
 
 private struct RulesPayload: Encodable {

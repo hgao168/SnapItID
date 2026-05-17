@@ -20,6 +20,13 @@ interface ComplianceRequest {
   rules?: CountryRules;
 }
 
+type UserTier = 'free' | 'pro' | 'lifetime';
+
+interface UserRecord {
+  id: string;
+  tier: UserTier;
+}
+
 interface ComplianceIssue {
   id: string;
   severity: 'CRITICAL' | 'WARNING' | 'INFO';
@@ -430,7 +437,7 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
     );
   }
 
-  let body: { imageBase64?: string; countryCode?: string; documentType?: string };
+  let body: { imageBase64?: string; countryCode?: string; documentType?: string; rules?: CountryRules };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -440,7 +447,12 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
     });
   }
 
-  const { imageBase64, countryCode = '', documentType = 'PASSPORT', rules } = body as { imageBase64?: string; countryCode?: string; documentType?: string; rules?: CountryRules };
+  const {
+    imageBase64,
+    countryCode = '',
+    documentType = 'PASSPORT',
+    rules,
+  } = body;
   if (!imageBase64) {
     return new Response(JSON.stringify({ error: 'imageBase64 required' }), {
       status: 400,
@@ -459,6 +471,11 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
   }
 
   const removeGlasses = rules && rules.glassesAllowed === false;
+  // Extract tier from JWT token in Authorization header
+  const authHeader = request.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const userTier = extractTierFromToken(token);
+  const shouldWatermark = userTier === 'free';
   const prompt =
     `Replace ONLY the background with a plain pure-white background (#FFFFFF). ` +
     (removeGlasses
@@ -470,6 +487,10 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
     `Do NOT change the person in any other way — do NOT alter their face shape, skin tone, facial structure, ` +
     `eye shape, eye colour, nose, mouth, jawline, ears, hair colour, hairstyle, wrinkles, expression, ` +
     `clothing, or body proportions. The person must remain 100% identical and recognisable. ` +
+    (shouldWatermark
+      ? `Add a clearly visible watermark text "SnapItID FREE PREVIEW" diagonally across the image. ` +
+        `The watermark should be semi-transparent but readable, and must remain inside the image bounds. `
+      : `Do NOT add any watermark, text, logo, brand mark, or overlay on the output image. `) +
     `Only remove any existing background and fill it with solid white. ` +
     `Optionally soften any harsh shadows on the white background area only. ` +
     `This is for a ${countryCode || 'international'} ${documentType.toLowerCase()} ID photo.`;
@@ -519,6 +540,8 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
       result: {
         imageBase64: `data:image/png;base64,${b64}`,
         model: 'gpt-image-2',
+        tier: userTier,
+        watermarked: shouldWatermark,
       },
     }),
     {
@@ -526,6 +549,41 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     }
   );
+}
+
+function extractTierFromToken(token: string): UserTier {
+  if (!token) return 'free';
+  
+  try {
+    // JWT format: header.payload.signature
+    const parts = token.split('.');
+    if (parts.length !== 3) return 'free';
+    
+    // Decode the payload (second part)
+    const payload = JSON.parse(atob(parts[1]));
+    if (payload.tier === 'pro' || payload.tier === 'lifetime') {
+      return payload.tier;
+    }
+  } catch {
+    // If any error in token parsing/decoding, default to free tier
+  }
+  
+  return 'free';
+}
+
+async function resolveUserTier(env: Env, userId?: string): Promise<UserTier> {
+  const id = (userId || '').trim();
+  if (!id) return 'free';
+
+  try {
+    const raw = await env.SNAPITID_KV.get(`users:${id}`);
+    if (!raw) return 'free';
+    const user = JSON.parse(raw) as UserRecord;
+    if (user.tier === 'pro' || user.tier === 'lifetime') return user.tier;
+  } catch {
+    // Fail closed to free tier if KV read/parse fails.
+  }
+  return 'free';
 }
 
 /**

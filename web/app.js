@@ -307,6 +307,9 @@ function renderAccountPanel() {
       els.accountUpgradeCopy.textContent = "Lifetime access is active on your account.";
     }
   }
+
+  // Keep HD-export CTA in sync whenever billing state changes.
+  updateUnlockCtaVisibility();
 }
 
 async function refreshAuthenticatedUser() {
@@ -1124,6 +1127,7 @@ async function runAIEnhance() {
     els.outputMeta.textContent =
       `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI`;
     canvas.parentElement.classList.add("has-content");
+    updateUnlockCtaVisibility();
     setStatus("AI enhancement complete. Review and download.", "ok");
   } catch (err) {
     console.error(err);

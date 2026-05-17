@@ -104,11 +104,19 @@ final class PhotoCaptureViewModel: NSObject, ObservableObject {
             errorMessage = nil
             statusMessage = "AI Enhance running — replacing background and removing forbidden items…"
             do {
+                var userId = UserDefaults.standard.string(forKey: "snapitid_user_id")
+                if userId == nil || userId?.isEmpty == true {
+                    userId = await api.ensureGuestUserId(existingUserId: nil)
+                    if let resolvedUserId = userId, !resolvedUserId.isEmpty {
+                        UserDefaults.standard.set(resolvedUserId, forKey: "snapitid_user_id")
+                    }
+                }
                 let result = try await api.enhance(
                     image: source,
                     countryCode: selectedCountry,
                     documentType: selectedDocumentType,
-                    rules: rules
+                    rules: rules,
+                    userId: userId
                 )
                 guard let img = result.image else {
                     throw APIError.encoding("AI returned no image")

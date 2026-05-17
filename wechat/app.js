@@ -14,6 +14,8 @@ App({
 
   onLaunch() {
     console.log('SnapItID launched');
+    // Warm up identity for tier-aware features. Safe to ignore failures.
+    this.ensureGuestUserId();
   },
 
   // ---- shared helpers -----
@@ -54,8 +56,31 @@ App({
   },
 
   // POST /api/compliance/enhance
-  enhance(countryCode, docType, imageBase64, rules) {
-    return this._postApi('/api/compliance/enhance', { countryCode, documentType: docType, imageBase64, rules });
+  async enhance(countryCode, docType, imageBase64, rules) {
+    const userId = await this.ensureGuestUserId();
+    const payload = { countryCode, documentType: docType, imageBase64, rules };
+    if (userId) payload.userId = userId;
+    return this._postApi('/api/compliance/enhance', payload);
+  },
+
+  async ensureGuestUserId() {
+    const cachedUserId = wx.getStorageSync('snapitid_user_id') || '';
+
+    try {
+      const result = await this._postApi('/api/payments/guest', {
+        userId: cachedUserId || undefined,
+      });
+      if (result && result.id) {
+        wx.setStorageSync('snapitid_user_id', result.id);
+        if (result.email) wx.setStorageSync('snapitid_user_email', result.email);
+        if (result.name) wx.setStorageSync('snapitid_user_name', result.name);
+        return result.id;
+      }
+    } catch (_err) {
+      // Keep app flows available even if payments worker is temporarily unavailable.
+    }
+
+    return cachedUserId || null;
   },
 
   _postApi(path, body) {

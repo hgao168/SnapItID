@@ -354,34 +354,64 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
   return computed === hash;
 }
 
-function generateJWT(user: UserRecord, secret: string): string {
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+function b64url(buf: ArrayBuffer): string {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+function b64urlEncode(str: string): string {
+  return btoa(unescape(encodeURIComponent(str)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
+}
+
+async function hmacKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    usage
+  );
+}
+
+async function generateJWT(user: UserRecord, secret: string): Promise<string> {
+  const header = b64urlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const now = Math.floor(Date.now() / 1000);
-  const payload = {
+  const payload = b64urlEncode(JSON.stringify({
     id: user.id,
     email: user.email,
     tier: user.tier,
     iat: now,
-    exp: now + 30 * 24 * 60 * 60, // 30 days
-  };
-  const payloadStr = btoa(JSON.stringify(payload));
-
-  // Simple HMAC-SHA256 signature using Web Crypto
-  return `${header}.${payloadStr}.signature_placeholder`;
+    exp: now + 30 * 24 * 60 * 60,
+  }));
+  const signingInput = `${header}.${payload}`;
+  const key = await hmacKey(secret, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${b64url(sig)}`;
 }
 
 async function verifyJWT(token: string, secret: string): Promise<JwtPayload | null> {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
-
   try {
-    const payloadStr = parts[1];
-    const payload = JSON.parse(atob(payloadStr));
-
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null; // Token expired
-    }
-
+    const signingInput = `${parts[0]}.${parts[1]}`;
+    const sigBytes = Uint8Array.from(
+      atob(parts[2].replace(/-/g, "+").replace(/_/g, "/")),
+      (c) => c.charCodeAt(0)
+    );
+    const key = await hmacKey(secret, ["verify"]);
+    const valid = await crypto.subtle.verify(
+      "HMAC", key, sigBytes, new TextEncoder().encode(signingInput)
+    );
+    if (!valid) return null;
+    const payload = JSON.parse(
+      decodeURIComponent(escape(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))))
+    );
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload as JwtPayload;
   } catch {
     return null;
@@ -433,7 +463,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
   await saveUser(env, user);
 
   const secret = env.JWT_SECRET || "default_secret_change_in_production";
-  const token = generateJWT(user, secret);
+  const token = await generateJWT(user, secret);
 
   return json(
     {
@@ -473,7 +503,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   }
 
   const secret = env.JWT_SECRET || "default_secret_change_in_production";
-  const token = generateJWT(user, secret);
+  const token = await generateJWT(user, secret);
 
   return json({
     success: true,
@@ -615,7 +645,7 @@ async function getAuthenticatedUser(request: Request, env: Env): Promise<UserRec
 
     // Generate a new JWT token for auto-login after password reset
     const secret = env.JWT_SECRET || "default_secret_change_in_production";
-    const jwtToken = generateJWT(user, secret);
+    const jwtToken = await generateJWT(user, secret);
 
     return json({
       success: true,

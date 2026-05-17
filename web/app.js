@@ -1,11 +1,21 @@
 /* SnapItID Photo Studio - client side */
 
+import {
+  DPI,
+  MM_PER_INCH,
+  mmToPx,
+  getFramingProfile,
+  computeFramingMetrics,
+  computeComplianceTransform,
+} from "./framing.js";
+import { SUPPORTED_LANGS, UI_TEXT, STATIC_TRANSLATION_IDS, tr as trWithLang, trf as trfWithLang } from "./i18n.js";
+import { LOCAL_COUNTRY_RULES } from "./rules-data.js";
+
 const API_BASE_CANDIDATES = buildApiBaseCandidates();
-const DPI = 300;
-const MM_PER_INCH = 25.4;
 
 const els = {
   engineStatus: document.getElementById("engine-status"),
+  lang: document.getElementById("langSelect"),
   country: document.getElementById("countrySelect"),
   doc: document.getElementById("docSelect"),
   rulesPanel: document.getElementById("rulesPanel"),
@@ -37,12 +47,15 @@ const els = {
 };
 
 const state = {
+  language: "en",
   rules: null,           // current country rules
   sourceImage: null,     // HTMLImageElement of selected source
   mask: null,            // ImageBitmap or HTMLCanvasElement of segmentation mask
   cameraStream: null,
   segmenter: null,
   segmenterReady: false,
+  faceDetector: null,
+  faceDetectorReady: false,
   apiBase: null,         // the API base that responded successfully
   lastProcessedDataURL: null,
 };
@@ -91,288 +104,67 @@ const BG_PRESETS = {
   LIGHT_GREY: "#e8e8e8",
 };
 
-const LOCAL_COUNTRY_RULES = {
-  US: {
-    id: "us_rules",
-    countryCode: "US",
-    countryName: "United States",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  CA: {
-    id: "ca_rules",
-    countryCode: "CA",
-    countryName: "Canada",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  GB: {
-    id: "gb_rules",
-    countryCode: "GB",
-    countryName: "United Kingdom",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "LIGHT_NEUTRAL",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 2,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  DE: {
-    id: "de_rules",
-    countryCode: "DE",
-    countryName: "Germany",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  FR: {
-    id: "fr_rules",
-    countryCode: "FR",
-    countryName: "France",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: true,
-    headCoverageAllowed: false,
-    minResolution: 2,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  JP: {
-    id: "jp_rules",
-    countryCode: "JP",
-    countryName: "Japan",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  AU: {
-    id: "au_rules",
-    countryCode: "AU",
-    countryName: "Australia",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  CN: {
-    id: "cn_rules",
-    countryCode: "CN",
-    countryName: "China",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  IT: {
-    id: "it_rules",
-    countryCode: "IT",
-    countryName: "Italy",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  ES: {
-    id: "es_rules",
-    countryCode: "ES",
-    countryName: "Spain",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  NL: {
-    id: "nl_rules",
-    countryCode: "NL",
-    countryName: "Netherlands",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  SE: {
-    id: "se_rules",
-    countryCode: "SE",
-    countryName: "Sweden",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  PL: {
-    id: "pl_rules",
-    countryCode: "PL",
-    countryName: "Poland",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 37, height: 46, headHeight: 294 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  IN: {
-    id: "in_rules",
-    countryCode: "IN",
-    countryName: "India",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  SG: {
-    id: "sg_rules",
-    countryCode: "SG",
-    countryName: "Singapore",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  TH: {
-    id: "th_rules",
-    countryCode: "TH",
-    countryName: "Thailand",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  VN: {
-    id: "vn_rules",
-    countryCode: "VN",
-    countryName: "Vietnam",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  ID: {
-    id: "id_rules",
-    countryCode: "ID",
-    countryName: "Indonesia",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  PH: {
-    id: "ph_rules",
-    countryCode: "PH",
-    countryName: "Philippines",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-  MY: {
-    id: "my_rules",
-    countryCode: "MY",
-    countryName: "Malaysia",
-    passportSize: { width: 35, height: 45, headHeight: 288 },
-    visaSize: { width: 35, height: 45, headHeight: 288 },
-    backgroundColorRequirement: "WHITE",
-    smileAllowed: false,
-    glassesAllowed: false,
-    headCoverageAllowed: false,
-    minResolution: 3,
-    printFormat: "4x6",
-    lastUpdated: "local-fallback",
-  },
-};
+// Framing profiles and the getFramingProfile() / computeFramingMetrics() /
+// computeComplianceTransform() helpers now live in ./framing.js.
+
+// SUPPORTED_LANGS, UI_TEXT, STATIC_TRANSLATION_IDS now live in ./i18n.js.
+
+
+// Thin wrappers around the pure-function translators in ./i18n.js so the
+// rest of this file can keep calling tr(key) / trf(key, replacements) without
+// threading the current language through every call site.
+function tr(key) {
+  return trWithLang(state.language, key);
+}
+
+function trf(key, replacements) {
+  return trfWithLang(state.language, key, replacements);
+}
+
+function preferredLanguage() {
+  const saved = localStorage.getItem("snapitid_lang");
+  if (saved && SUPPORTED_LANGS.includes(saved)) return saved;
+  const browser = (navigator.language || "en").slice(0, 2).toLowerCase();
+  return SUPPORTED_LANGS.includes(browser) ? browser : "en";
+}
+
+function applyLanguage(lang) {
+  state.language = SUPPORTED_LANGS.includes(lang) ? lang : "en";
+  localStorage.setItem("snapitid_lang", state.language);
+  document.documentElement.lang = state.language;
+  if (els.lang) els.lang.value = state.language;
+
+  STATIC_TRANSLATION_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = tr(id);
+  });
+
+  const hintEl = document.getElementById("cameraHint");
+  if (hintEl) hintEl.innerHTML = tr("cameraHintHtml");
+
+  if (els.doc && els.doc.options.length >= 2) {
+    els.doc.options[0].text = tr("passport");
+    els.doc.options[1].text = tr("visa");
+  }
+
+  if (!state.rules && els.rulesPanel) {
+    els.rulesPanel.textContent = tr("selectCountryPrompt");
+  }
+
+  updateEndpointInfo();
+  renderRules();
+}
+
+function backgroundLabel(bgKey) {
+  const key = String(bgKey || "WHITE").toUpperCase();
+  if (key === "WHITE") return tr("bgWhite");
+  if (key === "OFF_WHITE") return tr("bgOffWhite");
+  if (key === "LIGHT_NEUTRAL") return tr("bgLightNeutral");
+  if (key === "LIGHT_GREY") return tr("bgLightGrey");
+  return key.replace(/_/g, " ");
+}
+
+// LOCAL_COUNTRY_RULES now lives in ./rules-data.js.
 
 /* ---------- helpers ---------- */
 function setStatus(msg, kind) {
@@ -383,10 +175,6 @@ function setStatus(msg, kind) {
 function setEngine(label, kind) {
   els.engineStatus.textContent = label;
   els.engineStatus.className = "pill" + (kind ? " " + kind : "");
-}
-
-function mmToPx(mm) {
-  return Math.round((mm / MM_PER_INCH) * DPI);
 }
 
 function buildApiBaseCandidates() {
@@ -502,10 +290,87 @@ function runSegmentation(srcCanvas) {
   });
 }
 
+/* ---------- face detection engine (MediaPipe) ---------- */
+async function initFaceDetector() {
+  try {
+    if (typeof FaceDetection === "undefined") {
+      console.warn("MediaPipe FaceDetection library not loaded");
+      return;
+    }
+    const fd = new FaceDetection({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/${file}`,
+    });
+    fd.setOptions({ model: "short", minDetectionConfidence: 0.5 });
+    fd.onResults((results) => {
+      state._pendingFaces = results.detections || [];
+      if (state._resolveFace) {
+        state._resolveFace(results);
+        state._resolveFace = null;
+      }
+    });
+    await fd.initialize();
+    state.faceDetector = fd;
+    state.faceDetectorReady = true;
+  } catch (err) {
+    console.warn("MediaPipe FaceDetection unavailable:", err);
+  }
+}
+
+function runFaceDetection(srcCanvas) {
+  return new Promise((resolve, reject) => {
+    if (!state.faceDetectorReady) return reject(new Error("Face detector not ready"));
+    state._resolveFace = resolve;
+    state.faceDetector.send({ image: srcCanvas }).catch(reject);
+  });
+}
+
+// Returns head bounds in pixel coords of the given canvas using MediaPipe
+// FaceDetection. Returns null on failure.
+async function detectHeadBoundsMediaPipe(canvas) {
+  if (!state.faceDetectorReady) return null;
+  try {
+    await runFaceDetection(canvas);
+    const detections = state._pendingFaces || [];
+    if (!detections.length) return null;
+    // Pick the largest face (in case of multiple)
+    let best = detections[0];
+    let bestArea = 0;
+    for (const d of detections) {
+      const bb = d.boundingBox;
+      if (!bb) continue;
+      const area = (bb.width || 0) * (bb.height || 0);
+      if (area > bestArea) {
+        bestArea = area;
+        best = d;
+      }
+    }
+    const bb = best.boundingBox;
+    if (!bb) return null;
+    // MediaPipe returns normalized values: xCenter, yCenter, width, height in [0,1]
+    const W = canvas.width, H = canvas.height;
+    const fx = (bb.xCenter - bb.width / 2) * W;
+    const fy = (bb.yCenter - bb.height / 2) * H;
+    const fw = bb.width * W;
+    const fh = bb.height * H;
+    if (fw <= 0 || fh <= 0) return null;
+    // Expand face box to full head (hair + chin/jaw + ears).
+    const top = Math.max(0, Math.floor(fy - fh * 0.35));
+    const bottom = Math.min(H - 1, Math.ceil(fy + fh * 1.15));
+    const left = Math.max(0, Math.floor(fx - fw * 0.2));
+    const right = Math.min(W - 1, Math.ceil(fx + fw * 1.2));
+    if (right <= left || bottom <= top) return null;
+    return { top, bottom, left, right, width: right - left + 1, height: bottom - top + 1 };
+  } catch (err) {
+    console.warn("MediaPipe face detection failed:", err);
+    return null;
+  }
+}
+
 /* ---------- rules ---------- */
 async function loadRules() {
   const code = els.country.value;
-  els.rulesPanel.textContent = "Loading rules…";
+  els.rulesPanel.textContent = tr("rulesLoading");
   let lastError = null;
 
   for (const base of API_BASE_CANDIDATES) {
@@ -531,13 +396,15 @@ async function loadRules() {
 
   if (state.rules) {
     renderRules();
+    const size = activeSize();
+    const docLabel = els.doc.value === "VISA" ? tr("visa") : tr("passport");
     els.rulesPanel.innerHTML = `
-      <div><strong>${state.rules.countryName}</strong> · ${els.doc.value === "VISA" ? "Visa" : "Passport"}</div>
-      <div>Using built-in local rules because the API could not be reached.</div>
-      <div>Size: <strong>${activeSize().width} × ${activeSize().height} mm</strong> (${mmToPx(activeSize().width)} × ${mmToPx(activeSize().height)} px @ ${DPI} DPI)</div>
-      <div>Background: <strong>${state.rules.backgroundColorRequirement.replace("_", " ")}</strong></div>
+      <div><strong>${state.rules.countryName}</strong> · ${docLabel}</div>
+      <div>${tr("rulesFallbackLine")}</div>
+      <div>${tr("sizeLabel")}: <strong>${size.width} × ${size.height} mm</strong> (${mmToPx(size.width)} × ${mmToPx(size.height)} px @ ${DPI} DPI)</div>
+      <div>${tr("backgroundLabel")}: <strong>${backgroundLabel(state.rules.backgroundColorRequirement)}</strong></div>
     `;
-    setStatus("Using built-in country rules. You can still process and download photos.", "ok");
+    setStatus(tr("statusUsingLocalRules"), "ok");
     return;
   }
 
@@ -547,9 +414,9 @@ async function loadRules() {
 function updateEndpointInfo(err) {
   if (!els.endpointInfo) return;
   if (state.apiBase) {
-    els.endpointInfo.textContent = `API endpoint: ${state.apiBase}`;
+    els.endpointInfo.textContent = trf("endpointUsingApi", { base: state.apiBase });
   } else {
-    els.endpointInfo.textContent = "Using local country rules. AI compliance check is temporarily unavailable.";
+    els.endpointInfo.textContent = tr("endpointUsingLocal");
   }
 }
 
@@ -642,7 +509,7 @@ async function runAIEnhance() {
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext("2d");
-    // Apply the same head/crown framing math used by the main processor.
+    // Apply the same compliance framing constraints as the main processor.
     const bounds = {
       top: 0,
       bottom: img.height - 1,
@@ -651,32 +518,77 @@ async function runAIEnhance() {
       width: img.width,
       height: img.height,
     };
-    const estHeadHeight = bounds.height * 0.32;
-    // ICAO-style framing: head occupies ~72% of the frame height with the
-    // crown about 5% down from the top edge.
-    const desiredHeadFraction = 0.72;
-    const baseScale = (outH * desiredHeadFraction) / estHeadHeight;
-    const userZoom = parseFloat(els.zoom ? els.zoom.value : "1");
-    // Ensure the image always fully covers the canvas (no blank strips) by
-    // taking the larger of the head-framing scale and a cover-fit scale.
-    const coverScale = Math.max(outW / img.width, outH / img.height);
-    const scale = Math.max(baseScale * userZoom, coverScale);
-    const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
-    const offsetYFrac = parseFloat(els.offsetY ? els.offsetY.value : "0");
-    const crownTargetY = outH * (0.05 + offsetYFrac);
-    const personCenterX = (bounds.left + bounds.right) / 2;
-    const dw = img.width * scale;
-    const dh = img.height * scale;
-    let dx = outW / 2 - personCenterX * scale + outW * offsetXFrac;
-    let dy = crownTargetY - bounds.top * scale;
-    // Clamp so the image never leaves a blank strip on any edge.
-    if (dx > 0) dx = 0;
-    if (dx + dw < outW) dx = outW - dw;
-    if (dy > 0) dy = 0;
-    if (dy + dh < outH) dy = outH - dh;
+    const faceCanvas = document.createElement("canvas");
+    faceCanvas.width = img.width;
+    faceCanvas.height = img.height;
+    faceCanvas.getContext("2d").drawImage(img, 0, 0);
+    // Prefer MediaPipe (cross-browser) → fall back to browser FaceDetector.
+    let detectedHeadBounds = await detectHeadBoundsMediaPipe(faceCanvas);
+    if (!detectedHeadBounds) detectedHeadBounds = await detectFaceBoundsFromCanvas(faceCanvas);
+
     ctx.fillStyle = activeBackgroundColor();
     ctx.fillRect(0, 0, outW, outH);
-    ctx.drawImage(img, dx, dy, dw, dh);
+
+    if (detectedHeadBounds) {
+      // Use detected head bounds for precise compliance framing.
+      const metrics = computeFramingMetrics(bounds, detectedHeadBounds);
+      const framingProfile = getFramingProfile(els.country.value, els.doc.value, size);
+      const userZoom = parseFloat(els.zoom ? els.zoom.value : "1");
+      const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
+      const offsetYFrac = parseFloat(els.offsetY ? els.offsetY.value : "0");
+      const transform = computeComplianceTransform(
+        img.width,
+        img.height,
+        outW,
+        outH,
+        metrics,
+        framingProfile,
+        userZoom,
+        offsetXFrac,
+        offsetYFrac,
+        { fillOutput: true }
+      );
+      ctx.drawImage(img, transform.dx, transform.dy, transform.drawW, transform.drawH);
+    } else {
+      // No FaceDetector: run MediaPipe segmentation on the enhanced image to find
+      // the actual person/head position for compliance framing.
+      let aiTransform = null;
+      if (state.segmenterReady) {
+        try {
+          await runSegmentation(faceCanvas);
+          const aiMaskCvs = document.createElement("canvas");
+          aiMaskCvs.width = img.width;
+          aiMaskCvs.height = img.height;
+          aiMaskCvs.getContext("2d").drawImage(state._pendingMask, 0, 0, img.width, img.height);
+          const personBounds = maskBounds(aiMaskCvs, 64);
+          if (personBounds) {
+            const headBounds = estimateHeadBoundsFromMask(aiMaskCvs, personBounds, 64);
+            const aiMetrics = computeFramingMetrics(personBounds, headBounds);
+            const framingProfile = getFramingProfile(els.country.value, els.doc.value, size);
+            const userZoom = parseFloat(els.zoom ? els.zoom.value : "1");
+            const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
+            const offsetYFrac = parseFloat(els.offsetY ? els.offsetY.value : "0");
+            aiTransform = computeComplianceTransform(
+              img.width, img.height, outW, outH, aiMetrics, framingProfile,
+              userZoom, offsetXFrac, offsetYFrac, { fillOutput: true }
+            );
+          }
+        } catch (segErr) {
+          console.warn("Segmentation on AI-enhanced image failed:", segErr);
+        }
+      }
+      if (aiTransform) {
+        ctx.drawImage(img, aiTransform.dx, aiTransform.dy, aiTransform.drawW, aiTransform.drawH);
+      } else {
+        // Last resort: contain-fit centered
+        const containScale = Math.min(outW / img.width, outH / img.height);
+        const dw = img.width * containScale;
+        const dh = img.height * containScale;
+        const dx = (outW - dw) / 2;
+        const dy = (outH - dh) / 2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+    }
 
     state.lastProcessedDataURL = canvas.toDataURL("image/jpeg", 0.95);
     els.outputMeta.textContent =
@@ -778,23 +690,27 @@ function renderRules() {
   const bg = r.backgroundColorRequirement || "WHITE";
   els.bgColor.value = activeBackgroundColor();
   els.bgColor.disabled = true;
-  const bgLabel = String(bg).replace(/_/g, " ");
-  els.bgColor.title = `Fixed by country rule: ${bgLabel}`;
+  const bgLabel = backgroundLabel(bg);
+  els.bgColor.title = `${tr("backgroundLabel")}: ${bgLabel}`;
+  const docLabel = els.doc.value === "VISA" ? tr("visa") : tr("passport");
 
   els.rulesPanel.innerHTML = `
-    <div><strong>${r.countryName}</strong> · ${els.doc.value === "VISA" ? "Visa" : "Passport"}</div>
-    <div>Size: <strong>${size.width} × ${size.height} mm</strong> (${mmToPx(size.width)} × ${mmToPx(size.height)} px @ ${DPI} DPI)</div>
-    <div>Background: <strong>${bgLabel}</strong></div>
-    <div>Smile: <strong>${r.smileAllowed ? "allowed" : "not allowed"}</strong> · Glasses: <strong>${r.glassesAllowed ? "allowed" : "not allowed"}</strong> · Head cover: <strong>${r.headCoverageAllowed ? "allowed" : "not allowed"}</strong></div>
+    <div><strong>${r.countryName}</strong> · ${docLabel}</div>
+    <div>${tr("sizeLabel")}: <strong>${size.width} × ${size.height} mm</strong> (${mmToPx(size.width)} × ${mmToPx(size.height)} px @ ${DPI} DPI)</div>
+    <div>${tr("backgroundLabel")}: <strong>${bgLabel}</strong></div>
+    <div>${tr("smileLabel")}: <strong>${r.smileAllowed ? tr("allowed") : tr("notAllowed")}</strong> · ${tr("glassesLabel")}: <strong>${r.glassesAllowed ? tr("allowed") : tr("notAllowed")}</strong> · ${tr("headCoverLabel")}: <strong>${r.headCoverageAllowed ? tr("allowed") : tr("notAllowed")}</strong></div>
   `;
   if (els.enhanceHint) {
     const tips = [];
-    if (r.glassesAllowed === false) tips.push("remove your glasses");
-    if (r.headCoverageAllowed === false) tips.push("remove any head covering");
-    tips.push("replace the background with pure white");
-    els.enhanceHint.textContent =
-      `💡 ${r.countryName} forbids glasses${r.headCoverageAllowed === false ? " and head coverings" : ""} in ${els.doc.value === "VISA" ? "visa" : "passport"} photos. ` +
-      `Click "AI Enhance" to automatically ${tips.join(", ")} while keeping your face identical.`;
+    if (r.glassesAllowed === false) tips.push(tr("tipRemoveGlasses"));
+    if (r.headCoverageAllowed === false) tips.push(tr("tipRemoveHeadCover"));
+    tips.push(tr("tipWhiteBg"));
+    els.enhanceHint.textContent = "💡 " + trf("enhanceHint", {
+      country: r.countryName,
+      headPart: r.headCoverageAllowed === false ? tr("headPart") : "",
+      doc: docLabel.toLowerCase(),
+      tips: tips.join(", "),
+    });
   }
   resizeOutputCanvasToSpec();
 }
@@ -1026,11 +942,17 @@ function setupEventListeners() {
     link.click();
   });
 
+  bind(els.lang, "change", () => {
+    applyLanguage(els.lang.value);
+  });
+
   listenersBound = true;
 }
 
 /* ---------- bootstrap ---------- */
 (async function init() {
+  applyLanguage(preferredLanguage());
+
   if (location.protocol === "file:") {
     setStatus("You are opening this page as a local file. Use https://snapitid.ai or http://localhost to enable API + camera.", "err");
   }
@@ -1042,6 +964,8 @@ function setupEventListeners() {
   resizeOutputCanvasToSpec();
   await loadRules();
   await initSegmenter();
+  // Initialize face detector in parallel (don't await — it's optional).
+  initFaceDetector();
 })();
 
 function loadFromFile(file) {
@@ -1062,7 +986,7 @@ function loadFromDataURL(url) {
     els.originalImg.src = url;
     els.originalImg.parentElement.classList.add("has-content");
     els.processBtn.disabled = false;
-    setStatus("Photo loaded. Click Process Photo.", "ok");
+    setStatus(tr("statusPhotoLoaded"), "ok");
     // Auto-process for quick UX
     processPhoto();
   };
@@ -1107,6 +1031,127 @@ function maskBounds(maskCanvas, threshold) {
   return { top, bottom, left, right, width: right - left + 1, height: bottom - top + 1 };
 }
 
+async function detectFaceBoundsFromCanvas(canvas) {
+  if (typeof FaceDetector === "undefined") return null;
+  try {
+    const detector = new FaceDetector({ maxDetectedFaces: 1, fastMode: true });
+    const faces = await detector.detect(canvas);
+    if (!faces || !faces.length || !faces[0].boundingBox) return null;
+    const bb = faces[0].boundingBox;
+    if (bb.width <= 0 || bb.height <= 0) return null;
+
+    // Expand face box to approximate full head bounds (hair + chin + ears).
+    // FaceDetector typically returns from forehead to chin, so we extend a bit
+    // upward for hair and slightly downward for chin/jaw.
+    const top = Math.max(0, Math.floor(bb.y - bb.height * 0.3));
+    const bottom = Math.min(canvas.height - 1, Math.ceil(bb.y + bb.height * 1.15));
+    const left = Math.max(0, Math.floor(bb.x - bb.width * 0.2));
+    const right = Math.min(canvas.width - 1, Math.ceil(bb.x + bb.width * 1.2));
+
+    if (right <= left || bottom <= top) return null;
+    return { top, bottom, left, right, width: right - left + 1, height: bottom - top + 1 };
+  } catch (err) {
+    console.warn("FaceDetector unavailable or failed, using fallback framing", err);
+    return null;
+  }
+}
+
+function estimateHeadBoundsFromMask(maskCanvas, personBounds, threshold) {
+  const ctx = maskCanvas.getContext("2d");
+  const { width: w, height: h } = maskCanvas;
+  const data = ctx.getImageData(0, 0, w, h).data;
+
+  // Step 1: compute per-row person width and leftmost/rightmost x within personBounds.
+  const numRows = personBounds.bottom - personBounds.top + 1;
+  if (numRows < 4) return null;
+  const rowWidth = new Array(numRows).fill(0);
+  const rowLeft = new Array(numRows).fill(w);
+  const rowRight = new Array(numRows).fill(-1);
+  for (let y = personBounds.top; y <= personBounds.bottom; y++) {
+    const ri = y - personBounds.top;
+    for (let x = personBounds.left; x <= personBounds.right; x++) {
+      const i = (y * w + x) * 4;
+      if (data[i] > threshold) {
+        rowWidth[ri]++;
+        if (x < rowLeft[ri]) rowLeft[ri] = x;
+        if (x > rowRight[ri]) rowRight[ri] = x;
+      }
+    }
+  }
+
+  // Step 2: scan downward from the top of the person to find the head's widest
+  // row. The head widens (hair → ears) then narrows (cheeks → chin). We track
+  // a running max; when the current row's width drops to <85% of the running
+  // max for several rows in a row, we know we've passed the head's widest
+  // point. This avoids being fooled by shoulders, which are usually wider than
+  // the head and would otherwise dominate a global max search.
+  let headMaxWidth = 0;
+  let headMaxIdx = -1;
+  let belowCount = 0;
+  for (let ri = 0; ri < numRows; ri++) {
+    const rw = rowWidth[ri];
+    if (rw <= 0) continue;
+    if (rw > headMaxWidth) {
+      headMaxWidth = rw;
+      headMaxIdx = ri;
+      belowCount = 0;
+    } else if (headMaxWidth > 0 && rw < headMaxWidth * 0.85) {
+      belowCount++;
+      if (belowCount >= 3 && ri > headMaxIdx + 3) break;
+    } else {
+      belowCount = 0;
+    }
+  }
+  if (headMaxWidth <= 0 || headMaxIdx < 0) return null;
+
+  // Step 3: scan downward from the widest head row, looking for the neck-pinch:
+  // the row where width is locally minimum, just before shoulders widen out again.
+  // We track the minimum width seen; when width expands back to >1.25x that
+  // minimum we've passed the neck.
+  let neckIdx = -1;
+  let neckWidth = headMaxWidth;
+  for (let ri = headMaxIdx + 1; ri < numRows; ri++) {
+    if (rowWidth[ri] < neckWidth) {
+      neckWidth = rowWidth[ri];
+      neckIdx = ri;
+    } else if (neckIdx > 0 && rowWidth[ri] > neckWidth * 1.25) {
+      // shoulders widening — stop, neckIdx is our chin/jaw line.
+      break;
+    }
+  }
+
+  // If we didn't find a clear narrowing (neck width is not significantly less
+  // than head max width), fall back to a conservative head-height fraction.
+  if (neckIdx < 0 || neckWidth >= headMaxWidth * 0.85) {
+    neckIdx = Math.min(numRows - 1, Math.floor(numRows * 0.43));
+  }
+
+  const headTop = personBounds.top;
+  const headBottom = personBounds.top + neckIdx;
+
+  // Compute head left/right from rows in the head region only — this gives the
+  // face/hair horizontal extent, not the shoulder span.
+  let headLeft = w;
+  let headRight = -1;
+  for (let ri = 0; ri <= neckIdx; ri++) {
+    if (rowWidth[ri] === 0) continue;
+    if (rowLeft[ri] < headLeft) headLeft = rowLeft[ri];
+    if (rowRight[ri] > headRight) headRight = rowRight[ri];
+  }
+  if (headRight <= headLeft) return null;
+
+  return {
+    top: headTop,
+    bottom: headBottom,
+    left: headLeft,
+    right: headRight,
+    width: headRight - headLeft + 1,
+    height: headBottom - headTop + 1,
+  };
+}
+
+// computeFramingMetrics + computeComplianceTransform now live in ./framing.js.
+
 async function processPhoto() {
   if (!state.sourceImage) return;
   if (!state.rules) { setStatus("Select a country first.", "err"); return; }
@@ -1141,33 +1186,39 @@ async function processPhoto() {
 
     // Determine bounding box of person (or fall back to full image)
     let bounds;
+    // Prefer MediaPipe face detection (cross-browser) → fall back to the browser
+    // FaceDetector API → fall back to segmentation-mask head estimation.
+    let headBounds = await detectHeadBoundsMediaPipe(work);
+    if (!headBounds) headBounds = await detectFaceBoundsFromCanvas(work);
     if (maskCanvas) {
-      bounds = maskBounds(maskCanvas, 128);
+      // Use a stricter threshold (180) for person bounds so uncertain edge pixels
+      // (common with complex / dark backgrounds) don't inflate the bounding box
+      // and skew head-position estimation. Fall back to 128 if strict scan yields nothing.
+      bounds = maskBounds(maskCanvas, 180) || maskBounds(maskCanvas, 128);
+      if (!headBounds && bounds) {
+        headBounds = estimateHeadBoundsFromMask(maskCanvas, bounds, 128);
+      }
     }
     if (!bounds) {
       bounds = { top: 0, bottom: work.height - 1, left: 0, right: work.width - 1, width: work.width, height: work.height };
     }
-
-    // Heuristic: head height ~ 32% of person bounding box height (top portion)
-    const estHeadHeight = bounds.height * 0.32;
-    // Passport spec: head occupies ~62% of photo height (between 50-69% typical)
-    const desiredHeadFraction = 0.62;
-    const baseScale = (outH * desiredHeadFraction) / estHeadHeight;
+    const currentSize = activeSize();
+    const framingProfile = getFramingProfile(els.country.value, els.doc.value, currentSize);
+    const metrics = computeFramingMetrics(bounds, headBounds);
     const userZoom = parseFloat(els.zoom.value);
-    const scale = baseScale * userZoom;
-
-    // Source point (in work coords) that will map to a fixed point in output
-    // We want: crown (bounds.top) → output Y = outH * 0.10 (plus user offset)
     const offsetYFrac = parseFloat(els.offsetY.value);
     const offsetXFrac = parseFloat(els.offsetX ? els.offsetX.value : "0");
-    const crownTargetY = outH * (0.10 + offsetYFrac);
-    const personCenterX = (bounds.left + bounds.right) / 2;
-
-    // Where to draw the work canvas on the output canvas
-    const drawW = work.width * scale;
-    const drawH = work.height * scale;
-    const drawX = outW / 2 - personCenterX * scale + outW * offsetXFrac;
-    const drawY = crownTargetY - bounds.top * scale;
+    const transform = computeComplianceTransform(
+      work.width,
+      work.height,
+      outW,
+      outH,
+      metrics,
+      framingProfile,
+      userZoom,
+      offsetXFrac,
+      offsetYFrac
+    );
 
     // 1. Fill background
     outCtx.fillStyle = activeBackgroundColor();
@@ -1183,10 +1234,10 @@ async function processPhoto() {
       pCtx.globalCompositeOperation = "destination-in";
       pCtx.drawImage(maskCanvas, 0, 0);
       pCtx.globalCompositeOperation = "source-over";
-      outCtx.drawImage(personCanvas, drawX, drawY, drawW, drawH);
+      outCtx.drawImage(personCanvas, transform.dx, transform.dy, transform.drawW, transform.drawH);
     } else {
       // No segmentation: just draw cropped/scaled source over background (won't replace bg)
-      outCtx.drawImage(work, drawX, drawY, drawW, drawH);
+      outCtx.drawImage(work, transform.dx, transform.dy, transform.drawW, transform.drawH);
     }
 
     els.outputCanvas.parentElement.classList.add("has-content");
@@ -1199,7 +1250,7 @@ async function processPhoto() {
     els.downloadBtn.disabled = false;
     if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
     if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase;
-    setStatus(maskCanvas ? "Done. You can adjust zoom or download." : "Done (no background removal — model unavailable).", "ok");
+    setStatus(maskCanvas ? "Done. Compliance framing applied for head size and spacing." : "Done (no background removal - model unavailable).", "ok");
   } catch (err) {
     console.error(err);
     setStatus("Processing failed: " + err.message, "err");

@@ -2,35 +2,27 @@ import SwiftUI
 
 struct CountrySelectionView: View {
     @Binding var selectedCountry: String
-    
-    let countries = [
-        ("US", "United States"),
-        ("CA", "Canada"),
-        ("GB", "United Kingdom"),
-        ("DE", "Germany"),
-        ("FR", "France"),
-        ("JP", "Japan"),
-        ("AU", "Australia"),
-    ]
-    
+
+    private let countries = SupportedCountries.list
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Country")
                 .font(.system(size: 16, weight: .semibold))
-            
+
             Menu {
-                ForEach(countries, id: \.0) { code, name in
-                    Button(name) {
-                        selectedCountry = code
+                ForEach(countries, id: \.code) { country in
+                    Button(country.name) {
+                        selectedCountry = country.code
                     }
                 }
             } label: {
                 HStack {
-                    Text(countryName(for: selectedCountry))
+                    Text(SupportedCountries.name(for: selectedCountry))
                         .font(.system(size: 16, weight: .regular))
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.down")
                         .font(.system(size: 14, weight: .semibold))
                 }
@@ -43,10 +35,6 @@ struct CountrySelectionView: View {
             }
         }
         .padding(.horizontal, 24)
-    }
-    
-    private func countryName(for code: String) -> String {
-        countries.first { $0.0 == code }?.1 ?? code
     }
 }
 

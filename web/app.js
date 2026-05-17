@@ -354,6 +354,8 @@ function logoutUser() {
   localStorage.removeItem("snapitid_pending_upgrade_plan");
   state.currentUser = null;
   state.billingPlan = "free";
+  renderAccountPanel();
+  syncAuthNav();
   window.location.href = "/";
 }
 
@@ -1666,6 +1668,7 @@ function setupEventListeners() {
   // Auth check happens when they click "Open Studio" (see scroll handler below)
 
   loadBillingPlan();
+  syncAuthNav();
   applyBillingFromUrl();
   showPendingUpgradePrompt();
   applyLanguage(preferredLanguage());

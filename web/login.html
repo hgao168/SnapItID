@@ -301,7 +301,7 @@
             <label for="signupPlan">Plan</label>
             <select id="signupPlan" name="plan" required>
               <option value="free">Free</option>
-              <option value="pro">Pro Monthly</option>
+              <option value="pro">Premium Monthly</option>
               <option value="lifetime">Lifetime</option>
             </select>
           </div>
@@ -521,7 +521,7 @@
           showMessage(
             plan === "free"
               ? "Account created! Redirecting..."
-              : `Account created. Redirecting so you can upgrade to ${plan === "pro" ? "Pro Monthly" : "Lifetime"}.`,
+              : `Account created. Redirecting so you can upgrade to ${plan === "pro" ? "Premium Monthly" : "Lifetime"}.`,
             "success"
           );
           setTimeout(() => {

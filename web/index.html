@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260517-25">
+  <link rel="stylesheet" href="styles.css?v=20260518-1">
 </head>
 <body>
   <!-- ambient brand glows -->
@@ -111,7 +111,7 @@
             <p class="account-plan-value" id="accountPlanValue">Free</p>
           </div>
         </div>
-        <p class="account-upgrade-copy" id="accountUpgradeCopy">Free accounts can upgrade to Pro Monthly or Lifetime.</p>
+        <p class="account-upgrade-copy" id="accountUpgradeCopy">Free accounts can upgrade to Premium Monthly or Lifetime.</p>
         <div class="account-actions" id="accountActions">
           <button type="button" class="btn outline small" id="accountUpgradeProBtn">Upgrade to Pro</button>
           <button type="button" class="btn primary small" id="accountUpgradeLifetimeBtn">Upgrade to Lifetime</button>
@@ -144,23 +144,24 @@
                     <option value="CA">Canada</option>
                     <option value="CN">China</option>
                     <option value="DE">Germany</option>
-                    <option value="ES">Spain</option>
-                    <option value="FR">France</option>
+                    <option value="ES">Spain ✨ Premium</option>
+                    <option value="FR">France ✨ Premium</option>
                     <option value="GB">United Kingdom</option>
-                    <option value="ID">Indonesia</option>
+                    <option value="ID">Indonesia ✨ Premium</option>
                     <option value="IN">India</option>
-                    <option value="IT">Italy</option>
-                    <option value="JP">Japan</option>
-                    <option value="MY">Malaysia</option>
+                    <option value="IT">Italy ✨ Premium</option>
+                    <option value="JP">Japan ✨ Premium</option>
+                    <option value="MY">Malaysia ✨ Premium</option>
                     <option value="NL">Netherlands</option>
-                    <option value="PH">Philippines</option>
-                    <option value="PL">Poland</option>
-                    <option value="SE">Sweden</option>
+                    <option value="PH">Philippines ✨ Premium</option>
+                    <option value="PL">Poland ✨ Premium</option>
+                    <option value="SE">Sweden ✨ Premium</option>
                     <option value="SG">Singapore</option>
-                    <option value="TH">Thailand</option>
+                    <option value="TH">Thailand ✨ Premium</option>
                     <option value="US">United States</option>
-                    <option value="VN">Vietnam</option>
+                    <option value="VN">Vietnam ✨ Premium</option>
                   </select>
+                  <p class="upgrade-note">Unlock all countries by upgrading to <a href="#pricing">✨ Premium</a></p>
                 </div>
                 <div class="field">
                   <label for="docSelect" id="documentLabel">Document</label>
@@ -281,6 +282,10 @@
                 <button type="button" id="unlockHdBtn" class="btn primary" hidden>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                   <span id="unlockHdLabel">Unlock HD Export</span>
+                </button>
+                <button type="button" id="printBtn" class="btn ghost" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                  <span id="printLabel">Print Sheet</span>
                 </button>
               </div>
 
@@ -439,7 +444,7 @@
         </article>
 
         <article class="price-card">
-          <h3 id="planProTitle">Pro Monthly</h3>
+          <h3 id="planProTitle">Premium Monthly</h3>
           <p class="price-value" id="planProPrice">$4.99</p>
           <ul>
             <li id="planProF1">Unlimited HD exports</li>
@@ -481,9 +486,41 @@
     </div>
   </footer>
 
+  <!-- Print Sheet Modal -->
+  <div class="modal" id="printModal" hidden role="dialog" aria-modal="true" aria-labelledby="printModalTitle">
+    <div class="modal-backdrop" id="printModalBackdrop"></div>
+    <div class="modal-panel print-modal-panel">
+      <h3 id="printModalTitle">🖨️ Print Sheet Options</h3>
+      <div class="print-field">
+        <span class="print-field-label">Paper Size</span>
+        <div class="print-options">
+          <label class="print-opt"><input type="radio" name="printPaper" value="A4" checked> A4 (210 × 297 mm)</label>
+          <label class="print-opt"><input type="radio" name="printPaper" value="Letter"> Letter (8.5 × 11 in)</label>
+          <label class="print-opt"><input type="radio" name="printPaper" value="4x6"> 4 × 6 Photo (102 × 152 mm)</label>
+        </div>
+      </div>
+      <div class="print-field">
+        <span class="print-field-label">Photos per Sheet</span>
+        <div class="print-options">
+          <label class="print-opt"><input type="radio" name="printCount" value="1"> 1 photo</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="4" checked> 4 photos (2 × 2)</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="9"> 9 photos (3 × 3)</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="12"> 12 photos (3 × 4)</label>
+        </div>
+      </div>
+      <div class="modal-actions print-modal-actions">
+        <button type="button" class="btn ghost small" id="printModalClose">Cancel</button>
+        <button type="button" class="btn primary small" id="printModalConfirm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
-  <script type="module" src="app.js?v=20260517-28"></script>
+  <script type="module" src="app.js?v=20260518-1"></script>
 </body>
 </html>

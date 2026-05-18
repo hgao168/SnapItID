@@ -58,6 +58,11 @@ const els = {
   checkBtn: document.getElementById("checkBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
   unlockHdBtn: document.getElementById("unlockHdBtn"),
+  printBtn: document.getElementById("printBtn"),
+  printModal: document.getElementById("printModal"),
+  printModalBackdrop: document.getElementById("printModalBackdrop"),
+  printModalClose: document.getElementById("printModalClose"),
+  printModalConfirm: document.getElementById("printModalConfirm"),
   status: document.getElementById("statusLine"),
   complianceReport: document.getElementById("complianceReport"),
   endpointInfo: document.getElementById("endpointInfo"),
@@ -87,12 +92,12 @@ const state = {
   currentUser: null,
 };
 
-const FREE_COUNTRY_CODES = new Set(["US", "GB", "CA", "AU", "SG", "DE"]);
+const FREE_COUNTRY_CODES = new Set(["US", "GB", "CA", "AU", "SG", "DE", "CN", "IN", "NL"]);
 
 const PLAN_LABELS = {
   free: "Free",
   single: "Single Export",
-  pro: "Pro Monthly",
+  pro: "Premium Monthly",
   lifetime: "Lifetime",
 };
 
@@ -300,7 +305,7 @@ function renderAccountPanel() {
 
   if (els.accountUpgradeCopy) {
     if (tier === "free") {
-      els.accountUpgradeCopy.textContent = "Free accounts can upgrade to Pro Monthly or Lifetime.";
+      els.accountUpgradeCopy.textContent = "Free accounts can upgrade to Premium Monthly or Lifetime.";
     } else if (tier === "pro") {
       els.accountUpgradeCopy.textContent = "Pro accounts can upgrade to Lifetime at any time.";
     } else {
@@ -927,9 +932,17 @@ async function runComplianceCheck() {
   }
 
   els.checkBtn.disabled = true;
-  setStatus("Running AI compliance check on the latest output…");
   els.complianceReport.hidden = true;
   els.complianceReport.textContent = "";
+
+  // Flashing dots to inform user that AI check is in progress
+  let _checkDotCount = 1;
+  const _checkBase = "Running AI compliance check";
+  setStatus(_checkBase + ".");
+  const _checkDotsInterval = setInterval(() => {
+    _checkDotCount = (_checkDotCount % 3) + 1;
+    els.status.textContent = _checkBase + ".".repeat(_checkDotCount);
+  }, 500);
 
   try {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -970,6 +983,7 @@ async function runComplianceCheck() {
     console.error(err);
     setStatus("AI compliance check failed: " + err.message, "err");
   } finally {
+    clearInterval(_checkDotsInterval);
     els.checkBtn.disabled = false;
   }
 }
@@ -996,7 +1010,15 @@ async function runAIEnhance() {
     els.complianceReport.hidden = true;
     els.complianceReport.innerHTML = "";
   }
-  setStatus("Enhancing photo with AI… this can take 10–30 seconds.");
+
+  // Flashing dots to inform user that AI generation is in progress
+  let _dotCount = 1;
+  const _dotsBase = "Generating AI photo";
+  setStatus(_dotsBase + ".");
+  const _dotsInterval = setInterval(() => {
+    _dotCount = (_dotCount % 3) + 1;
+    els.status.textContent = _dotsBase + ".".repeat(_dotCount);
+  }, 500);
 
   try {
     const token = localStorage.getItem("snapitid_token");
@@ -1128,11 +1150,13 @@ async function runAIEnhance() {
       `${outW} × ${outH} px · ${size.width} × ${size.height} mm @ ${DPI} DPI`;
     canvas.parentElement.classList.add("has-content");
     updateUnlockCtaVisibility();
+    if (els.printBtn) els.printBtn.disabled = false;
     setStatus("AI enhancement complete. Review and download.", "ok");
   } catch (err) {
     console.error(err);
     setStatus("AI enhancement failed: " + err.message, "err");
   } finally {
+    clearInterval(_dotsInterval);
     els.enhanceBtn.disabled = false;
     if (els.checkBtn) els.checkBtn.disabled = !state.apiBase;
   }
@@ -1148,13 +1172,85 @@ function loadImage(src) {
   });
 }
 
+/* ---------- Print sheet ---------- */
+function openPrintModal() {
+  if (els.printModal) els.printModal.hidden = false;
+}
+
+function closePrintModal() {
+  if (els.printModal) els.printModal.hidden = true;
+}
+
+async function printSheet() {
+  const imgUrl = state.lastProcessedDataURL;
+  if (!imgUrl) {
+    setStatus("Process a photo first before printing.", "err");
+    return;
+  }
+
+  const paperValue = (document.querySelector('input[name="printPaper"]:checked') || {}).value || "A4";
+  const photoCount = parseInt((document.querySelector('input[name="printCount"]:checked') || {}).value || "4", 10);
+
+  const PAPERS = {
+    A4:     { w: "210mm", h: "297mm", name: "A4" },
+    Letter: { w: "8.5in", h: "11in",  name: "US Letter" },
+    "4x6":  { w: "4in",   h: "6in",   name: "4×6 Photo" },
+  };
+  const paper = PAPERS[paperValue] || PAPERS.A4;
+
+  const cols = photoCount === 1 ? 1 : photoCount === 4 ? 2 : 3;
+  const rows = Math.ceil(photoCount / cols);
+
+  const photos = Array(photoCount).fill(`<img src="${imgUrl}" alt="passport photo">`).join("");
+
+  const html = `<!doctype html><html><head><meta charset="utf-8">
+<title>SnapItID Print – ${photoCount} photo${photoCount > 1 ? "s" : ""} (${paper.name})</title>
+<style>
+@page { size: ${paper.w} ${paper.h}; margin: 4mm; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #fff; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(${cols}, 1fr);
+  grid-template-rows: repeat(${rows}, 1fr);
+  gap: 3mm;
+  width: 100%;
+  height: 100vh;
+  page-break-inside: avoid;
+}
+.grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+</style></head><body>
+<div class="grid">${photos}</div>
+<script>
+window.addEventListener("load", function() {
+  setTimeout(function() { window.print(); }, 300);
+});
+window.addEventListener("afterprint", function() { window.close(); });
+<\/script>
+</body></html>`;
+
+  const printWin = window.open("", "_blank", "width=900,height=700");
+  if (!printWin) {
+    setStatus("Popup blocked. Please allow popups for this site to print.", "err");
+    return;
+  }
+  printWin.document.write(html);
+  printWin.document.close();
+  closePrintModal();
+}
+
 function renderComplianceResult(result, meta) {
   if (!result) {
     els.complianceReport.hidden = true;
     return;
   }
   const score = typeof result.complianceScore === "number" ? result.complianceScore : null;
-  const compliant = !!result.isCompliant;
+  let compliant = !!result.isCompliant;
   const issues = Array.isArray(result.issues) ? result.issues : [];
   const recs = Array.isArray(result.recommendations) ? result.recommendations : [];
 
@@ -1191,6 +1287,49 @@ function renderComplianceResult(result, meta) {
         ? "MEDIUM"
         : "LOW";
 
+  // ---- Explicit No-Smile / No-Headcover client-side checks ----
+  const rules = state.rules;
+  const smileDetected = issues.some(
+    (i) => i && (i.id === "expression" || (i.description && /smile/i.test(i.description)))
+  );
+  const headcoverDetected = issues.some(
+    (i) => i && (i.id === "head_cover" || (i.description && /head.?cover|hat|hijab|turban/i.test(i.description)))
+  );
+
+  const noSmileRequired = rules && rules.smileAllowed === false;
+  const noHeadcoverRequired = rules && rules.headCoverageAllowed === false;
+
+  const noSmileFail = noSmileRequired && smileDetected;
+  const noHeadcoverFail = noHeadcoverRequired && headcoverDetected;
+
+  // If either rule-based check fails, the overall result is also non-compliant.
+  if (noSmileFail || noHeadcoverFail) compliant = false;
+
+  // Build explicit rule-check rows (only shown when the rule applies)
+  let ruleChecksHtml = "";
+  if (noSmileRequired || noHeadcoverRequired) {
+    const rows = [];
+    if (noSmileRequired) {
+      const pass = !smileDetected;
+      rows.push(
+        `<li class="compliance-rule-check ${pass ? "pass" : "fail"}">` +
+        `<span class="rule-check-icon">${pass ? "✓" : "✗"}</span>` +
+        `<strong>No Smile</strong> — ${pass ? "PASS · Neutral expression detected." : "FAIL · Smile detected; neutral expression required."}` +
+        `</li>`
+      );
+    }
+    if (noHeadcoverRequired) {
+      const pass = !headcoverDetected;
+      rows.push(
+        `<li class="compliance-rule-check ${pass ? "pass" : "fail"}">` +
+        `<span class="rule-check-icon">${pass ? "✓" : "✗"}</span>` +
+        `<strong>No Headcover</strong> — ${pass ? "PASS · No head covering detected." : "FAIL · Head covering detected; must be removed for this country."}` +
+        `</li>`
+      );
+    }
+    ruleChecksHtml = `<ul class="rule-checks-list">${rows.join("")}</ul>`;
+  }
+
   const issuesHtml = issues.length
     ? `<ul>${issues.map((i) => `<li><strong>${i.severity || "INFO"}</strong> · ${i.category || ""} — ${i.description || ""}</li>`).join("")}</ul>`
     : "<div>No issues detected.</div>";
@@ -1205,6 +1344,7 @@ function renderComplianceResult(result, meta) {
     </div>
     <div><strong>AI Compliance:</strong> ${compliant ? "PASS" : "NEEDS WORK"}${score !== null ? ` · Score ${score}/100` : ""}${passRate !== null ? ` · Checks passed ${passRate}%` : ""} · Confidence ${confidence}</div>
     <div class="muted">Checked image: ${meta && meta.imageSource ? meta.imageSource : "processed"} · Fingerprint ${meta && meta.fingerprint ? meta.fingerprint : "n/a"} · Request ${meta && meta.requestId ? meta.requestId : "n/a"}</div>
+    ${ruleChecksHtml}
     ${issuesHtml}
     ${recsHtml}
   `;
@@ -1344,7 +1484,7 @@ function setupEventListeners() {
 
   if (els.accountUpgradeProBtn) {
     bind(els.accountUpgradeProBtn, "click", () => {
-      setStatus("Opening Stripe checkout for Pro Monthly…", "ok");
+      setStatus("Opening Stripe checkout for Premium Monthly…", "ok");
       startPaymentCheckout("stripe", "pro");
     });
   }
@@ -1532,6 +1672,10 @@ function setupEventListeners() {
   bind(els.processBtn, "click", processPhoto);
   bind(els.checkBtn, "click", runComplianceCheck);
   bind(els.enhanceBtn, "click", runAIEnhance);
+  bind(els.printBtn, "click", openPrintModal);
+  bind(els.printModalClose, "click", closePrintModal);
+  bind(els.printModalBackdrop, "click", closePrintModal);
+  bind(els.printModalConfirm, "click", printSheet);
 
   [els.zoom, els.offsetY, els.offsetX].forEach((c) =>
     bind(c, "input", () => {
@@ -1716,6 +1860,7 @@ function loadFromDataURL(url) {
     state.lastOutputKind = null;
     state.lastEnhancedRawDataURL = null;
     if (els.downloadBtn) els.downloadBtn.disabled = true;
+    if (els.printBtn) els.printBtn.disabled = true;
     if (els.checkBtn) els.checkBtn.disabled = true;
     if (els.enhanceBtn) els.enhanceBtn.disabled = true;
     if (els.complianceReport) {
@@ -1996,12 +2141,13 @@ async function processPhoto() {
     state.lastOutputKind = "processed";
     state.lastEnhancedRawDataURL = null;
     els.downloadBtn.disabled = false;
+    if (els.printBtn) els.printBtn.disabled = false;
     const countryAllowed = canUseSelectedCountry();
     if (els.checkBtn) els.checkBtn.disabled = !state.apiBase || !countryAllowed;
     if (els.enhanceBtn) els.enhanceBtn.disabled = !state.apiBase || !countryAllowed;
     updateUnlockCtaVisibility();
     if (!countryAllowed) {
-      setStatus("This country is premium-only. Upgrade to Single Export, Pro Monthly, or Lifetime to continue.", "err");
+      setStatus("This country is premium-only. Upgrade to Single Export, Premium Monthly, or Lifetime to continue.", "err");
       return;
     }
     if (!canUseHdExport()) {

@@ -32,6 +32,11 @@ enum SupportedCountries {
 
     /// Look up the display name for a given ISO code; returns the code itself
     /// when no match is found so callers always get a non-empty string.
+    /// Countries available on the free tier; all others require a Premium plan.
+    static let freeCountryCodes: Set<String> = ["US", "GB", "CA", "AU", "SG", "DE", "CN", "IN", "NL"]
+
+    static func isPremium(code: String) -> Bool { !freeCountryCodes.contains(code) }
+
     static func name(for code: String) -> String {
         list.first { $0.code == code }?.name ?? code
     }

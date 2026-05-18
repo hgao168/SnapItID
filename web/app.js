@@ -938,9 +938,9 @@ async function runComplianceCheck() {
   const _checkBase = "Running AI compliance check";
   setStatus(_checkBase + ".", "processing");
   const _checkDotsInterval = setInterval(() => {
-    _checkDotCount = (_checkDotCount % 3) + 1;
+    _checkDotCount = (_checkDotCount % 6) + 1;
     setStatus(_checkBase + ".".repeat(_checkDotCount), "processing");
-  }, 500);
+  }, 400);
 
   try {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1014,9 +1014,9 @@ async function runAIEnhance() {
   const _dotsBase = "Generating AI photo";
   setStatus(_dotsBase + ".", "processing");
   const _dotsInterval = setInterval(() => {
-    _dotCount = (_dotCount % 3) + 1;
+    _dotCount = (_dotCount % 6) + 1;
     setStatus(_dotsBase + ".".repeat(_dotCount), "processing");
-  }, 500);
+  }, 400);
 
   try {
     const token = localStorage.getItem("snapitid_token");

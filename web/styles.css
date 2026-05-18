@@ -1024,6 +1024,12 @@ input[type="color"]:disabled {
   color: #00f5a0;
   font-weight: 700;
 }
+.print-photo-size-info {
+  font-size: 0.88rem;
+  color: var(--brand);
+  font-weight: 600;
+  padding: 4px 0;
+}
 .status-line.err {
   background: rgba(239, 68, 68, 0.08);
   border-color: rgba(239, 68, 68, 0.25);

@@ -1173,6 +1173,13 @@ function loadImage(src) {
 /* ---------- Print sheet ---------- */
 function openPrintModal() {
   if (els.printModal) els.printModal.hidden = false;
+  const sizeEl = document.getElementById("printPhotoSizeInfo");
+  if (sizeEl) {
+    const size = activeSize();
+    const photoW = (size && size.width)  ? size.width  : 35;
+    const photoH = (size && size.height) ? size.height : 45;
+    sizeEl.textContent = `${photoW} × ${photoH} mm — prints at actual size when scale is 100%`;
+  }
 }
 
 function closePrintModal() {
@@ -1196,33 +1203,41 @@ async function printSheet() {
   };
   const paper = PAPERS[paperValue] || PAPERS.A4;
 
+  // Get actual photo dimensions from country rules (width/height in mm)
+  const size = activeSize();
+  const photoW = (size && size.width)  ? size.width  : 35;
+  const photoH = (size && size.height) ? size.height : 45;
+
   const cols = photoCount === 1 ? 1 : photoCount === 4 ? 2 : 3;
-  const rows = Math.ceil(photoCount / cols);
 
   const photos = Array(photoCount).fill(`<img src="${imgUrl}" alt="passport photo">`).join("");
 
   const html = `<!doctype html><html><head><meta charset="utf-8">
 <title>SnapItID Print – ${photoCount} photo${photoCount > 1 ? "s" : ""} (${paper.name})</title>
 <style>
-@page { size: ${paper.w} ${paper.h}; margin: 4mm; }
+@page { size: ${paper.w} ${paper.h}; margin: 8mm; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #fff; }
+body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.scale-note {
+  font-family: sans-serif; font-size: 9pt; color: #555;
+  margin-bottom: 4mm; padding: 2mm 3mm;
+  border: 1px solid #ccc; border-radius: 3px; background: #fffbe6;
+}
+@media print { .scale-note { display: none; } }
 .grid {
-  display: grid;
-  grid-template-columns: repeat(${cols}, 1fr);
-  grid-template-rows: repeat(${rows}, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 3mm;
-  width: 100%;
-  height: 100vh;
-  page-break-inside: avoid;
+  align-content: flex-start;
 }
 .grid img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: ${photoW}mm;
+  height: ${photoH}mm;
   display: block;
+  object-fit: fill;
 }
 </style></head><body>
+<div class="scale-note">⚠️ Set print scale to <strong>100% (Actual size)</strong> to ensure each photo prints at exactly ${photoW}×${photoH}mm.</div>
 <div class="grid">${photos}</div>
 <script>
 window.addEventListener("load", function() {

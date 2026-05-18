@@ -1018,6 +1018,12 @@ input[type="color"]:disabled {
   border-color: rgba(0, 245, 160, 0.22);
   color: var(--brand);
 }
+.status-line.processing {
+  background: rgba(0, 245, 160, 0.07);
+  border-color: rgba(0, 245, 160, 0.3);
+  color: #00f5a0;
+  font-weight: 700;
+}
 .status-line.err {
   background: rgba(239, 68, 68, 0.08);
   border-color: rgba(239, 68, 68, 0.25);

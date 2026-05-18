@@ -936,10 +936,10 @@ async function runComplianceCheck() {
   // Flashing dots to inform user that AI check is in progress
   let _checkDotCount = 1;
   const _checkBase = "Running AI compliance check";
-  setStatus(_checkBase + ".");
+  setStatus(_checkBase + ".", "processing");
   const _checkDotsInterval = setInterval(() => {
     _checkDotCount = (_checkDotCount % 3) + 1;
-    els.status.textContent = _checkBase + ".".repeat(_checkDotCount);
+    setStatus(_checkBase + ".".repeat(_checkDotCount), "processing");
   }, 500);
 
   try {
@@ -1012,10 +1012,10 @@ async function runAIEnhance() {
   // Flashing dots to inform user that AI generation is in progress
   let _dotCount = 1;
   const _dotsBase = "Generating AI photo";
-  setStatus(_dotsBase + ".");
+  setStatus(_dotsBase + ".", "processing");
   const _dotsInterval = setInterval(() => {
     _dotCount = (_dotCount % 3) + 1;
-    els.status.textContent = _dotsBase + ".".repeat(_dotCount);
+    setStatus(_dotsBase + ".".repeat(_dotCount), "processing");
   }, 500);
 
   try {

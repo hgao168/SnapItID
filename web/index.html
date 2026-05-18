@@ -499,17 +499,16 @@
         <span class="print-field-label">Paper Size</span>
         <div class="print-options">
           <label class="print-opt"><input type="radio" name="printPaper" value="A4" checked> A4 (210 × 297 mm)</label>
-          <label class="print-opt"><input type="radio" name="printPaper" value="Letter"> Letter (8.5 × 11 in)</label>
           <label class="print-opt"><input type="radio" name="printPaper" value="4x6"> 4 × 6 Photo (102 × 152 mm)</label>
         </div>
       </div>
       <div class="print-field">
         <span class="print-field-label">Photos per Sheet</span>
-        <div class="print-options">
-          <label class="print-opt"><input type="radio" name="printCount" value="1"> 1 photo</label>
-          <label class="print-opt"><input type="radio" name="printCount" value="4" checked> 4 photos (2 × 2)</label>
-          <label class="print-opt"><input type="radio" name="printCount" value="9"> 9 photos (3 × 3)</label>
-          <label class="print-opt"><input type="radio" name="printCount" value="12"> 12 photos (3 × 4)</label>
+        <div class="print-options" id="printCountOptions">
+          <label class="print-opt"><input type="radio" name="printCount" value="5" checked> 5 photos</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="10"> 10 photos</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="15"> 15 photos</label>
+          <label class="print-opt"><input type="radio" name="printCount" value="20"> 20 photos</label>
         </div>
       </div>
       <div class="modal-actions print-modal-actions">
@@ -525,6 +524,6 @@
   <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection@0.4.1646425229/face_detection.js" crossorigin="anonymous"></script>
-  <script type="module" src="app.js?v=20260518-3"></script>
+  <script type="module" src="app.js?v=20260518-4"></script>
 </body>
 </html>

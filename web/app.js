@@ -1171,6 +1171,20 @@ function loadImage(src) {
 }
 
 /* ---------- Print sheet ---------- */
+const PRINT_COUNT_OPTIONS = {
+  A4:  [{ v: 5, label: "5 photos" }, { v: 10, label: "10 photos" }, { v: 15, label: "15 photos" }, { v: 20, label: "20 photos" }],
+  "4x6": [{ v: 4, label: "4 photos" }, { v: 8, label: "8 photos" }],
+};
+
+function updatePrintCountOptions(paper) {
+  const container = document.getElementById("printCountOptions");
+  if (!container) return;
+  const opts = PRINT_COUNT_OPTIONS[paper] || PRINT_COUNT_OPTIONS.A4;
+  container.innerHTML = opts.map((o, i) =>
+    `<label class="print-opt"><input type="radio" name="printCount" value="${o.v}"${i === 0 ? " checked" : ""}> ${o.label}</label>`
+  ).join("");
+}
+
 function openPrintModal() {
   if (els.printModal) els.printModal.hidden = false;
   const sizeEl = document.getElementById("printPhotoSizeInfo");
@@ -1180,6 +1194,13 @@ function openPrintModal() {
     const photoH = (size && size.height) ? size.height : 45;
     sizeEl.textContent = `${photoW} × ${photoH} mm — prints at actual size when scale is 100%`;
   }
+  // Sync count options to current paper selection
+  const currentPaper = (document.querySelector('input[name="printPaper"]:checked') || {}).value || "A4";
+  updatePrintCountOptions(currentPaper);
+  // Update count options when paper changes
+  document.querySelectorAll('input[name="printPaper"]').forEach(radio => {
+    radio.addEventListener("change", () => updatePrintCountOptions(radio.value));
+  });
 }
 
 function closePrintModal() {
@@ -1197,9 +1218,8 @@ async function printSheet() {
   const photoCount = parseInt((document.querySelector('input[name="printCount"]:checked') || {}).value || "4", 10);
 
   const PAPERS = {
-    A4:     { w: "210mm", h: "297mm", name: "A4" },
-    Letter: { w: "8.5in", h: "11in",  name: "US Letter" },
-    "4x6":  { w: "4in",   h: "6in",   name: "4×6 Photo" },
+    A4:    { w: "210mm", h: "297mm", name: "A4",       cols: 5 },
+    "4x6": { w: "4in",   h: "6in",   name: "4×6 Photo", cols: 2 },
   };
   const paper = PAPERS[paperValue] || PAPERS.A4;
 
@@ -1208,7 +1228,7 @@ async function printSheet() {
   const photoW = (size && size.width)  ? size.width  : 35;
   const photoH = (size && size.height) ? size.height : 45;
 
-  const cols = photoCount === 1 ? 1 : photoCount === 4 ? 2 : 3;
+  const cols = paper.cols;
 
   const photos = Array(photoCount).fill(`<img src="${imgUrl}" alt="passport photo">`).join("");
 

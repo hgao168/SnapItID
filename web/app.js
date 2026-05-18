@@ -570,8 +570,6 @@ function applyCountryGateUI() {
     Array.from(els.country.options || []).forEach((opt) => {
       const premium = isPremiumCountry(opt.value);
       opt.disabled = premium && !isPaidPlan();
-      if (premium && !opt.text.includes("(PRO)")) opt.text += " (PRO)";
-      if (!premium) opt.text = opt.text.replace(" (PRO)", "");
     });
     if (!allowed) {
       // Move free users back to the first available free country.

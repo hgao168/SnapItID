@@ -66,6 +66,31 @@ jobs:
 
       # ── Build ─────────────────────────────────────────────────────────────────
 
+      - name: Generate app icon sizes
+        run: |
+          SRC="iOS/SnapItID/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+          DEST="iOS/SnapItID/Assets.xcassets/AppIcon.appiconset"
+          # iPhone
+          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-20@2x.png"
+          sips -z 60  60  "$SRC" --out "$DEST/AppIcon-20@3x.png"
+          sips -z 58  58  "$SRC" --out "$DEST/AppIcon-29@2x.png"
+          sips -z 87  87  "$SRC" --out "$DEST/AppIcon-29@3x.png"
+          sips -z 80  80  "$SRC" --out "$DEST/AppIcon-40@2x.png"
+          sips -z 120 120 "$SRC" --out "$DEST/AppIcon-40@3x.png"
+          sips -z 120 120 "$SRC" --out "$DEST/AppIcon-60@2x.png"
+          sips -z 180 180 "$SRC" --out "$DEST/AppIcon-60@3x.png"
+          # iPad
+          sips -z 20  20  "$SRC" --out "$DEST/AppIcon-ipad-20.png"
+          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-ipad-20@2x.png"
+          sips -z 29  29  "$SRC" --out "$DEST/AppIcon-ipad-29.png"
+          sips -z 58  58  "$SRC" --out "$DEST/AppIcon-ipad-29@2x.png"
+          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-ipad-40.png"
+          sips -z 80  80  "$SRC" --out "$DEST/AppIcon-ipad-40@2x.png"
+          sips -z 76  76  "$SRC" --out "$DEST/AppIcon-76.png"
+          sips -z 152 152 "$SRC" --out "$DEST/AppIcon-76@2x.png"
+          sips -z 167 167 "$SRC" --out "$DEST/AppIcon-83.5@2x.png"
+          cp "$SRC" "$DEST/AppIcon-1024.png"
+
       - name: Archive app
         run: |
           xcodebuild archive \

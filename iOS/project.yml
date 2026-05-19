@@ -1,0 +1,63 @@
+name: SnapItID
+
+options:
+  bundleIdPrefix: ai.snapitid
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    DEVELOPMENT_TEAM: 39CYNW3CYT
+
+targets:
+  SnapItID:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: SnapItID
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.snapitid.snapitid
+        SWIFT_VERSION: "5.9"
+        DEVELOPMENT_TEAM: 39CYNW3CYT
+        TARGETED_DEVICE_FAMILY: "1,2"
+      configs:
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+          CODE_SIGN_IDENTITY: "Apple Development"
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Apple Distribution"
+          PROVISIONING_PROFILE_SPECIFIER: "SnapItID"
+    info:
+      path: SnapItID/Info.plist
+      properties:
+        CFBundleName: SnapItID
+        CFBundleDisplayName: SnapItID
+        CFBundleIdentifier: ai.snapitid.snapitid
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundlePackageType: APPL
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSCameraUsageDescription: "SnapItID needs camera access to capture your ID photo."
+        NSPhotoLibraryUsageDescription: "SnapItID needs photo library access to select your ID photo."
+        NSPhotoLibraryAddUsageDescription: "SnapItID needs access to save your compliant ID photo to your library."
+    scheme:
+      testTargets: []

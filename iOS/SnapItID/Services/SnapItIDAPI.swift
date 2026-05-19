@@ -49,7 +49,8 @@ final class SnapItIDAPI {
             countryCode: countryCode,
             documentType: documentType.rawValue,
             imageBase64: dataURL,
-            rules: rules.map(RulesPayload.init)
+            rules: rules.map(RulesPayload.init),
+            userId: nil
         )
 
         let url = baseURL.appendingPathComponent("/api/compliance/check")

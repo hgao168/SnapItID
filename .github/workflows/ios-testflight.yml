@@ -68,7 +68,7 @@ jobs:
 
       - name: Generate app icon sizes
         run: |
-          SRC="iOS/SnapItID/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
+          SRC="web/images/SnapItID.png"
           DEST="iOS/SnapItID/Assets.xcassets/AppIcon.appiconset"
           # iPhone
           sips -z 40  40  "$SRC" --out "$DEST/AppIcon-20@2x.png"
@@ -89,6 +89,7 @@ jobs:
           sips -z 76  76  "$SRC" --out "$DEST/AppIcon-76.png"
           sips -z 152 152 "$SRC" --out "$DEST/AppIcon-76@2x.png"
           sips -z 167 167 "$SRC" --out "$DEST/AppIcon-83.5@2x.png"
+          # App Store (1024x1024)
           cp "$SRC" "$DEST/AppIcon-1024.png"
 
       - name: Archive app

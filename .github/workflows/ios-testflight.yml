@@ -127,9 +127,12 @@ jobs:
           echo "$APP_STORE_CONNECT_API_KEY" \
             > ~/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8
 
+          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" | head -1)
+          echo "Uploading: $IPA_PATH"
+
           xcrun altool --upload-app \
             --type ios \
-            --file "$RUNNER_TEMP/export/SnapItID.ipa" \
+            --file "$IPA_PATH" \
             --apiKey  "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --verbose

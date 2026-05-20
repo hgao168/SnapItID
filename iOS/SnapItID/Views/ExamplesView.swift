@@ -90,10 +90,3 @@ private struct ExampleCard: View {
 }
 
 #Preview { ExamplesView() }
-
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-#Preview { ExamplesView() }

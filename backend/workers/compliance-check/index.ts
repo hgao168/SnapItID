@@ -252,11 +252,13 @@ async function runComplianceAnalysis(
       : (aiResponse?.description ?? aiResponse?.response ?? aiResponse?.text ?? '');
     parsed = extractJSON(text);
   } catch (err) {
+    // Surface a friendly message; never leak internal codes or stack details.
+    void err;
     issues.push({
       id: 'ai_unavailable',
-      severity: 'WARNING',
+      severity: 'INFO',
       category: 'AI_SERVICE',
-      description: 'AI vision model unavailable: ' + (err instanceof Error ? err.message : 'unknown'),
+      description: 'Some automated checks could not run on this photo. Rule-based requirements were verified.',
     });
   }
 
@@ -323,7 +325,7 @@ async function runComplianceAnalysis(
       id: 'ai_parse',
       severity: 'INFO',
       category: 'AI_SERVICE',
-      description: 'AI analysis was partial, so only rule-based checks were used for this photo.',
+      description: 'Some automated checks could not run on this photo. Rule-based requirements were verified.',
     });
   }
 

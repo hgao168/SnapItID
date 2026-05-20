@@ -40,8 +40,12 @@ final class SnapItIDAPI {
         documentType: DocumentType,
         rules: CountryRules?
     ) async throws -> ComplianceResult {
-        guard let jpeg = image.jpegData(compressionQuality: 0.85) else {
-            throw APIError.encoding("Failed to JPEG-encode image")
+        // Downscale before sending so the AI backend never receives an
+        // oversized payload. 1024 px max edge is plenty for ICAO checks and
+        // keeps the request well under platform limits.
+        let downscaled = Self.downscale(image, maxDimension: 1024)
+        guard let jpeg = downscaled.jpegData(compressionQuality: 0.8) else {
+            throw APIError.encoding("Could not prepare photo for compliance check.")
         }
         let dataURL = "data:image/jpeg;base64," + jpeg.base64EncodedString()
 
@@ -167,6 +171,24 @@ final class SnapItIDAPI {
     }
 
     // MARK: - Helpers
+
+    /// Resize the image so the longest edge is at most `maxDimension` pixels.
+    /// Returns the original image when it is already small enough.
+    private static func downscale(_ image: UIImage, maxDimension: CGFloat) -> UIImage {
+        let size = image.size
+        let longest = max(size.width, size.height)
+        guard longest > maxDimension else { return image }
+        let scale = maxDimension / longest
+        let newSize = CGSize(width: floor(size.width * scale),
+                             height: floor(size.height * scale))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
 
     private static let decoder: JSONDecoder = {
         let d = JSONDecoder()

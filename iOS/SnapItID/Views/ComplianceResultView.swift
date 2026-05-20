@@ -13,10 +13,15 @@ struct ComplianceResultView: View {
         self.onDismiss = onDismiss
     }
 
-    private struct RuleCheck { let label: String; let passes: Bool }
+    private enum CheckState { case pass, fail, notChecked }
+    private struct RuleCheck { let label: String; let state: CheckState }
     private var selectedSize: PhotoSize? {
         guard let rules else { return nil }
         return documentType == .visa ? rules.visaSize : rules.passportSize
+    }
+
+    private var aiUnavailable: Bool {
+        result.issues.contains { $0.category == .aiService }
     }
 
     private func hasIssue(_ categories: Set<IssueCategory>, matching keywords: [String] = []) -> Bool {
@@ -26,6 +31,14 @@ struct ComplianceResultView: View {
             let text = (issue.description + " " + (issue.suggestion ?? "")).lowercased()
             return keywords.contains { text.contains($0.lowercased()) }
         }
+    }
+
+    /// Resolve a rule row state. AI-dependent rows show `.notChecked` when
+    /// the AI service was unavailable, instead of misleading the user with a
+    /// green PASS based on the absence of negative signal.
+    private func aiCheck(_ pass: Bool) -> CheckState {
+        if aiUnavailable { return .notChecked }
+        return pass ? .pass : .fail
     }
 
     private var analysisNote: ComplianceIssue? {
@@ -40,16 +53,37 @@ struct ComplianceResultView: View {
         var checks: [RuleCheck] = []
         guard let rules else { return checks }
 
+        // Deterministic rows (independent of AI): framing pipeline guarantees
+        // these dimensions, so they always pass.
         if let size = selectedSize {
-            checks.append(RuleCheck(label: "Photo size: \(size.width)×\(size.height) mm", passes: true))
-            checks.append(RuleCheck(label: "Head height target: \(size.headHeight) px", passes: !hasIssue([.headSize, .eyePosition], matching: ["head size", "eye", "face too small", "face too large"])))
+            checks.append(RuleCheck(label: "Photo size: \(size.width)\u{00D7}\(size.height) mm", state: .pass))
+            checks.append(RuleCheck(
+                label: "Head height target: \(size.headHeight) px",
+                state: aiCheck(!hasIssue([.headSize, .eyePosition], matching: ["head size", "eye", "face too small", "face too large"]))
+            ))
         }
 
-        checks.append(RuleCheck(label: "Background: \(rules.backgroundColorRequirement.displayName)", passes: !hasIssue([.background], matching: ["background", "plain", "uniform"])))
-        checks.append(RuleCheck(label: "Minimum resolution: \(rules.minResolution) MP", passes: !hasIssue([.resolution], matching: ["resolution", "small", "low resolution"])))
-        checks.append(RuleCheck(label: rules.smileAllowed ? "Smile allowed" : "Neutral expression required", passes: rules.smileAllowed || !hasIssue([.smileDetection], matching: ["neutral", "smile", "mouth closed", "teeth"])))
-        checks.append(RuleCheck(label: rules.glassesAllowed ? "Glasses allowed" : "No glasses", passes: rules.glassesAllowed || !hasIssue([.glassesForbidden, .glassesReflection], matching: ["glasses", "spectacles", "eyeglasses", "remove glasses", "glare"])))
-        checks.append(RuleCheck(label: rules.headCoverageAllowed ? "Head covering allowed" : "No head covering", passes: rules.headCoverageAllowed || !hasIssue([.headCoverForbidden], matching: ["head covering", "covering"])))
+        // AI-dependent rows: shown as "Needs review" when AI could not run.
+        checks.append(RuleCheck(
+            label: "Background: \(rules.backgroundColorRequirement.displayName)",
+            state: aiCheck(!hasIssue([.background], matching: ["background", "plain", "uniform"]))
+        ))
+        checks.append(RuleCheck(label: "Minimum resolution: \(rules.minResolution) MP", state: .pass))
+        checks.append(RuleCheck(
+            label: rules.smileAllowed ? "Smile allowed" : "Neutral expression required",
+            state: rules.smileAllowed ? .pass
+                : aiCheck(!hasIssue([.smileDetection], matching: ["neutral", "smile", "mouth closed", "teeth"]))
+        ))
+        checks.append(RuleCheck(
+            label: rules.glassesAllowed ? "Glasses allowed" : "No glasses",
+            state: rules.glassesAllowed ? .pass
+                : aiCheck(!hasIssue([.glassesForbidden, .glassesReflection], matching: ["glasses", "spectacles", "eyeglasses", "remove glasses", "glare"]))
+        ))
+        checks.append(RuleCheck(
+            label: rules.headCoverageAllowed ? "Head covering allowed" : "No head covering",
+            state: rules.headCoverageAllowed ? .pass
+                : aiCheck(!hasIssue([.headCoverForbidden], matching: ["head covering", "covering"]))
+        ))
 
         return checks
     }
@@ -57,12 +91,49 @@ struct ComplianceResultView: View {
     private var passColor:  Color { Color(red: 0.2, green: 0.9, blue: 0.6) }
     private var failColor:  Color { Color(red: 1.0, green: 0.35, blue: 0.45) }
     private var warnColor:  Color { Color(red: 1.0, green: 0.7,  blue: 0.2) }
-    private var statusColor: Color { result.isCompliant ? passColor : failColor }
-    private var statusText:  String { result.isCompliant ? "PASS" : "NEEDS ATTENTION" }
+    private var neutralColor: Color { Color.white.opacity(0.55) }
+    private var statusColor: Color {
+        if aiUnavailable { return warnColor }
+        return result.isCompliant ? passColor : failColor
+    }
+    private var statusText: String {
+        if aiUnavailable { return "NEEDS REVIEW" }
+        return result.isCompliant ? "PASS" : "NEEDS ATTENTION"
+    }
+    private var statusIcon: String {
+        if aiUnavailable { return "exclamationmark.triangle.fill" }
+        return result.isCompliant ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
+    }
+    private var displayConfidence: String {
+        aiUnavailable ? "—" : result.confidenceLabel
+    }
     private var scoreColor: Color {
+        if aiUnavailable { return warnColor }
         if result.complianceScore >= 90 { return passColor }
         if result.complianceScore >= 75 { return warnColor }
         return failColor
+    }
+
+    private func color(for state: CheckState) -> Color {
+        switch state {
+        case .pass: return passColor
+        case .fail: return failColor
+        case .notChecked: return neutralColor
+        }
+    }
+    private func icon(for state: CheckState) -> String {
+        switch state {
+        case .pass: return "checkmark.circle.fill"
+        case .fail: return "xmark.circle.fill"
+        case .notChecked: return "questionmark.circle.fill"
+        }
+    }
+    private func badge(for state: CheckState) -> String {
+        switch state {
+        case .pass: return "PASS"
+        case .fail: return "FAIL"
+        case .notChecked: return "NEEDS REVIEW"
+        }
     }
 
     var body: some View {
@@ -92,19 +163,20 @@ struct ComplianceResultView: View {
                     Text("\(Int(result.complianceScore))")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(scoreColor)
+                        .opacity(aiUnavailable ? 0.45 : 1)
                 }
             }
 
             // ── Status badge ─────────────────────────────────────────────────
             HStack(spacing: 8) {
-                Image(systemName: result.isCompliant ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                Image(systemName: statusIcon)
                     .font(.system(size: 14))
                 Text(statusText)
                     .font(.system(size: 13, weight: .bold))
                     .tracking(0.5)
                 Spacer()
                 HStack(spacing: 10) {
-                    statPill("Confidence", result.confidenceLabel)
+                    statPill("Confidence", displayConfidence)
                     statPill("Issues", "\(displayIssues.count)")
                 }
             }
@@ -121,23 +193,24 @@ struct ComplianceResultView: View {
             if !ruleChecks.isEmpty {
                 VStack(spacing: 6) {
                     ForEach(ruleChecks, id: \.label) { check in
+                        let c = color(for: check.state)
                         HStack(spacing: 10) {
-                            Image(systemName: check.passes ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(check.passes ? passColor : failColor)
+                            Image(systemName: icon(for: check.state))
+                                .foregroundStyle(c)
                                 .font(.system(size: 14))
                             Text(check.label)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.white)
                             Spacer()
-                            Text(check.passes ? "PASS" : "FAIL")
+                            Text(badge(for: check.state))
                                 .font(.system(size: 10, weight: .bold))
                                 .tracking(0.8)
-                                .foregroundStyle(check.passes ? passColor : failColor)
+                                .foregroundStyle(c)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(Capsule()
-                                    .fill((check.passes ? passColor : failColor).opacity(0.15))
+                                    .fill(c.opacity(0.15))
                                     .overlay(Capsule()
-                                        .stroke((check.passes ? passColor : failColor).opacity(0.4), lineWidth: 1)))
+                                        .stroke(c.opacity(0.4), lineWidth: 1)))
                         }
                         .padding(10)
                         .glassCard(8)
@@ -167,10 +240,13 @@ struct ComplianceResultView: View {
                             .font(.system(size: 10, weight: .semibold))
                             .tracking(0.8)
                             .foregroundStyle(.white.opacity(0.45))
-                        Text(note.description)
+                        // Always render a stable, user-friendly message rather
+                        // than whatever raw text the worker provided.
+                        Text("Some automated checks could not run on this photo. Rule-based requirements were verified — tap Check to retry the AI checks.")
                             .font(.system(size: 12))
                             .foregroundStyle(.white.opacity(0.7))
                     }
+                    .accessibilityLabel(Text(note.description))
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)

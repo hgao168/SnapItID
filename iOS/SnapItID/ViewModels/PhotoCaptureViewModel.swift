@@ -162,9 +162,14 @@ final class PhotoCaptureViewModel: NSObject, ObservableObject {
                 rules: rules
             )
             self.complianceResult = result
-            self.statusMessage = result.isCompliant
-                ? "AI photo passes compliance ✓"
-                : "AI photo generated — review compliance results below."
+            let aiUnavailable = result.issues.contains { $0.category == .aiService }
+            if aiUnavailable {
+                self.statusMessage = "AI photo generated. Some automated checks could not run — tap Check to retry."
+            } else if result.isCompliant {
+                self.statusMessage = "AI photo passes compliance ✓"
+            } else {
+                self.statusMessage = "AI photo generated — review compliance results below."
+            }
         } catch {
             // Non-fatal: compliance check after enhance is best-effort
             self.statusMessage = "AI enhancement complete."

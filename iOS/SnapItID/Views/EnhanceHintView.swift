@@ -9,23 +9,27 @@ struct EnhanceHintView: View {
     var body: some View {
         if let text = hintText {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundStyle(Color.green)
-                    .font(.system(size: 14))
+                Image(systemName: "wand.and.sparkles")
+                    .foregroundStyle(snapAccent)
+                    .font(.system(size: 15, weight: .semibold))
                     .padding(.top, 1)
                 Text(text)
                     .font(.system(size: 13))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(12)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.green.opacity(0.10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.green.opacity(0.35), lineWidth: 1)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(snapAccent.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                LinearGradient(colors: [snapAccent.opacity(0.6), snapAccent2.opacity(0.3)],
+                                               startPoint: .leading, endPoint: .trailing),
+                                lineWidth: 1))
             )
-            .cornerRadius(10)
             .padding(.horizontal, 24)
         }
     }

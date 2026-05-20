@@ -1,90 +1,96 @@
 import SwiftUI
 
+// MARK: - Shared design tokens (glass theme)
+
+let snapAccent   = Color(red: 0.0,  green: 0.83, blue: 0.73)   // teal
+let snapAccent2  = Color(red: 0.16, green: 0.65, blue: 1.0)    // cyan
+let glassFill    = Color.white.opacity(0.08)
+let glassBorder  = Color.white.opacity(0.14)
+let bgTop        = Color(red: 0.05, green: 0.07, blue: 0.18)
+let bgBottom     = Color(red: 0.02, green: 0.03, blue: 0.12)
+
+struct GlassCard: ViewModifier {
+    var cornerRadius: CGFloat = 16
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(glassFill)
+                    .overlay(RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(glassBorder, lineWidth: 1))
+            )
+    }
+}
+extension View {
+    func glassCard(_ r: CGFloat = 16) -> some View { modifier(GlassCard(cornerRadius: r)) }
+}
+
+// MARK: - ContentView
+
 struct ContentView: View {
     @StateObject private var viewModel = PhotoCaptureViewModel()
+    @StateObject private var auth = AuthService.shared
     @State private var showPrintOptions = false
     @State private var showShareSheet = false
     @State private var shareImage: UIImage? = nil
+    @State private var showAuth = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 22) {
-                    // Hero
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("SnapItID")
-                            .font(.system(size: 30, weight: .bold))
-                            .tracking(-0.5)
-                        Text("Compliant passport & visa photos. AI-enhanced.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+            ZStack {
+                LinearGradient(colors: [bgTop, bgBottom],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                    .ignoresSafeArea()
 
-                    // Country + Document
-                    CountrySelectionView(selectedCountry: $viewModel.selectedCountry)
-                    DocumentTypeSelectionView(selectedType: $viewModel.selectedDocumentType)
-
-                    // Country rules panel
-                    if let rules = viewModel.rules {
-                        RulesPanelView(rules: rules, documentType: viewModel.selectedDocumentType)
-                    }
-
-                    // Photo capture / upload
-                    PhotoSelectionView(viewModel: viewModel, photoImage: $viewModel.photoImage)
-
-                    // Country-aware hint about AI Enhance
-                    if let rules = viewModel.rules, viewModel.photoImage != nil {
-                        EnhanceHintView(rules: rules, documentType: viewModel.selectedDocumentType)
-                    }
-
-                    // Action buttons
-                    if viewModel.photoImage != nil {
-                        actionRow
-                    }
-
-                    // Enhanced image preview
-                    if let enhanced = viewModel.enhancedImage {
-                        enhancedPreview(enhanced: enhanced)
-                    }
-
-                    // Status / error
-                    if let status = viewModel.statusMessage {
-                        let isActive = viewModel.isEnhancing || viewModel.isCheckingCompliance
-                        Text(status)
-                            .font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                            .foregroundStyle(isActive ? Color.green : Color.secondary)
-                            .padding(.horizontal, 24)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let error = viewModel.errorMessage {
-                        Label(error, systemImage: "exclamationmark.circle.fill")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.red)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.red.opacity(0.08))
-                            .cornerRadius(8)
-                            .padding(.horizontal, 24)
-                    }
-
-                    // Compliance result
-                    if let result = viewModel.complianceResult {
-                        ComplianceResultView(result: result, rules: viewModel.rules, onDismiss: viewModel.reset)
-                    }
-
-                    Divider().padding(.horizontal, 24).padding(.top, 8)
-
-                    // Examples gallery
-                    ExamplesView()
-
-                    Spacer(minLength: 16)
+                // Decorative glow orbs
+                GeometryReader { geo in
+                    Circle()
+                        .fill(snapAccent.opacity(0.12))
+                        .frame(width: 300, height: 300)
+                        .blur(radius: 80)
+                        .offset(x: geo.size.width * 0.5, y: -60)
+                    Circle()
+                        .fill(snapAccent2.opacity(0.08))
+                        .frame(width: 250, height: 250)
+                        .blur(radius: 70)
+                        .offset(x: -60, y: geo.size.height * 0.55)
                 }
-                .padding(.vertical, 12)
+                .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(spacing: 20) {
+                        heroSection
+                        CountrySelectionView(selectedCountry: $viewModel.selectedCountry)
+                        DocumentTypeSelectionView(selectedType: $viewModel.selectedDocumentType)
+                        if let rules = viewModel.rules {
+                            RulesPanelView(rules: rules, documentType: viewModel.selectedDocumentType)
+                        }
+                        PhotoSelectionView(viewModel: viewModel, photoImage: $viewModel.photoImage)
+                        if let rules = viewModel.rules, viewModel.photoImage != nil {
+                            EnhanceHintView(rules: rules, documentType: viewModel.selectedDocumentType)
+                        }
+                        if viewModel.photoImage != nil { actionRow }
+                        if let enhanced = viewModel.enhancedImage {
+                            enhancedPreview(enhanced: enhanced)
+                        }
+                        statusRow
+                        if let result = viewModel.complianceResult {
+                            ComplianceResultView(result: result, rules: viewModel.rules, onDismiss: viewModel.reset)
+                        }
+                        Rectangle()
+                            .fill(glassBorder)
+                            .frame(height: 1)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
+                        ExamplesView()
+                        Spacer(minLength: 32)
+                    }
+                    .padding(.vertical, 12)
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .sheet(isPresented: $showPrintOptions) {
                 if let img = viewModel.enhancedImage ?? viewModel.photoImage {
                     let photoSizeMm: CGSize = {
@@ -106,106 +112,242 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showShareSheet) {
-                if let img = shareImage {
-                    ShareSheet(items: [img])
-                }
+                if let img = shareImage { ShareSheet(items: [img]) }
+            }
+            .sheet(isPresented: $showAuth) {
+                NavigationStack { AuthView().environmentObject(auth) }
+                    .preferredColorScheme(.dark)
             }
         }
     }
 
-    // MARK: - Actions row
+    // MARK: - Hero
+
+    private var heroSection: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 0) {
+                    Text("SnapIt").font(.system(size: 32, weight: .heavy)).foregroundStyle(.white)
+                    Text("ID").font(.system(size: 32, weight: .heavy)).foregroundStyle(snapAccent)
+                }
+                Text("Compliant passport & visa photos. AI-enhanced.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Spacer()
+            // Account / tier badge — opens sign-in sheet for guests,
+            // shows tier label and quick logout for authenticated users.
+            accountBadge
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+    }
+
+    // MARK: - Account badge
+
+    @ViewBuilder
+    private var accountBadge: some View {
+        Menu {
+            if auth.isAuthenticated, let u = auth.user {
+                Section {
+                    Text(u.name).font(.caption)
+                    Text(u.email).font(.caption2)
+                }
+                Section {
+                    Text("Plan: \(u.tier.displayName)")
+                    if !u.tier.isPaid {
+                        Link("Upgrade to Premium",
+                             destination: URL(string: "https://snapitid.ai/#pricing")!)
+                        Link("Get Lifetime",
+                             destination: URL(string: "https://snapitid.ai/#pricing")!)
+                    }
+                    Button("Refresh status") { Task { await auth.refresh() } }
+                }
+                Button("Sign out", role: .destructive) { auth.logout() }
+            } else {
+                Button("Sign in / Register") { showAuth = true }
+                Link("View plans",
+                     destination: URL(string: "https://snapitid.ai/#pricing")!)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: auth.isAuthenticated
+                      ? (auth.isPaid ? "crown.fill" : "person.crop.circle.fill")
+                      : "person.crop.circle")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(auth.isAuthenticated ? auth.tier.displayName.uppercased() : "SIGN IN")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.8)
+            }
+            .foregroundStyle(auth.isPaid ? .black.opacity(0.85) : .white)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(
+                Group {
+                    if auth.isPaid {
+                        LinearGradient(colors: [snapAccent, snapAccent2],
+                                       startPoint: .leading, endPoint: .trailing)
+                    } else {
+                        glassFill
+                    }
+                }
+            )
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(
+                auth.isPaid ? Color.clear : glassBorder, lineWidth: 1
+            ))
+        }
+    }
+
+    // MARK: - Action row
 
     @ViewBuilder
     private var actionRow: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Button(action: viewModel.runEnhance) {
-                    HStack {
-                        if viewModel.isEnhancing { ProgressView().tint(.white) }
-                        else { Image(systemName: "sparkles") }
-                        Text(viewModel.isEnhancing ? "Enhancing…" : "AI Enhance")
-                            .font(.system(size: 14, weight: .semibold))
+        HStack(spacing: 12) {
+            Button(action: viewModel.runEnhance) {
+                HStack(spacing: 8) {
+                    if viewModel.isEnhancing {
+                        ProgressView().tint(.black).scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "sparkles").font(.system(size: 14, weight: .semibold))
                     }
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(Color.green)
-                    .foregroundStyle(Color(red: 0.02, green: 0.13, blue: 0.10))
-                    .cornerRadius(10)
+                    Text(viewModel.isEnhancing ? "Enhancing…" : "AI Enhance")
+                        .font(.system(size: 14, weight: .bold))
                 }
-                .disabled(viewModel.isEnhancing || viewModel.isCheckingCompliance)
-
-                Button(action: viewModel.runComplianceCheck) {
-                    HStack {
-                        if viewModel.isCheckingCompliance { ProgressView() }
-                        else { Image(systemName: "checkmark.seal") }
-                        Text(viewModel.isCheckingCompliance ? "Checking…" : "Check Compliance")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .frame(maxWidth: .infinity).frame(height: 48)
-                    .background(Color(.systemGray6))
-                    .foregroundStyle(.primary)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(.systemGray4), lineWidth: 1))
-                    .cornerRadius(10)
-                }
-                .disabled(viewModel.isEnhancing || viewModel.isCheckingCompliance)
+                .frame(maxWidth: .infinity).frame(height: 50)
+                .foregroundStyle(.black.opacity(0.85))
+                .background(
+                    LinearGradient(colors: [snapAccent, snapAccent2],
+                                   startPoint: .leading, endPoint: .trailing)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
+            .disabled(viewModel.isEnhancing || viewModel.isCheckingCompliance)
+
+            Button(action: viewModel.runComplianceCheck) {
+                HStack(spacing: 8) {
+                    if viewModel.isCheckingCompliance {
+                        ProgressView().tint(snapAccent).scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "checkmark.seal").font(.system(size: 14, weight: .semibold))
+                    }
+                    Text(viewModel.isCheckingCompliance ? "Checking…" : "Check")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity).frame(height: 50)
+                .foregroundStyle(.white)
+                .glassCard(14)
+            }
+            .disabled(viewModel.isEnhancing || viewModel.isCheckingCompliance)
         }
         .padding(.horizontal, 24)
     }
 
+    // MARK: - Status row
+
+    @ViewBuilder
+    private var statusRow: some View {
+        let isActive = viewModel.isEnhancing || viewModel.isCheckingCompliance
+        if let status = viewModel.statusMessage {
+            HStack(spacing: 8) {
+                if isActive {
+                    ProgressView().tint(snapAccent).scaleEffect(0.75)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(snapAccent)
+                        .font(.system(size: 13))
+                }
+                Text(status)
+                    .font(.system(size: 13, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(isActive ? snapAccent : .white.opacity(0.75))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(10)
+            .padding(.horizontal, 24)
+        }
+        if let error = viewModel.errorMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(Color(red: 1, green: 0.35, blue: 0.35))
+                    .font(.system(size: 13))
+                Text(error)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(red: 1, green: 0.55, blue: 0.55))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.red.opacity(0.12))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.red.opacity(0.3), lineWidth: 1))
+            )
+            .padding(.horizontal, 24)
+        }
+    }
+
+    // MARK: - Enhanced preview
+
     @ViewBuilder
     private func enhancedPreview(enhanced: UIImage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("AI-enhanced result")
-                    .font(.system(size: 14, weight: .semibold))
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(snapAccent)
+                    Text("AI-Enhanced Result")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                }
                 Spacer()
                 if let m = viewModel.enhancedModelName {
-                    Text("by \(m)")
+                    Text(m)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Capsule().fill(glassFill).overlay(Capsule().stroke(glassBorder, lineWidth: 1)))
                 }
             }
+
             Image(uiImage: enhanced)
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity)
                 .background(Color.white)
-                .cornerRadius(10)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(snapAccent.opacity(0.3), lineWidth: 1.5))
 
             HStack(spacing: 10) {
                 Button(action: viewModel.saveResultToPhotos) {
-                    Label("Save to Photos", systemImage: "square.and.arrow.down")
-                        .font(.system(size: 14, weight: .semibold))
+                    Label("Save", systemImage: "square.and.arrow.down")
+                        .font(.system(size: 14, weight: .bold))
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(Color.blue)
-                        .foregroundStyle(.white)
-                        .cornerRadius(8)
+                        .foregroundStyle(.black.opacity(0.85))
+                        .background(LinearGradient(colors: [snapAccent, snapAccent2],
+                                                   startPoint: .leading, endPoint: .trailing))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 Button {
-                    shareImage = enhanced
-                    showShareSheet = true
+                    shareImage = enhanced; showShareSheet = true
                 } label: {
                     Label("Share", systemImage: "square.and.arrow.up")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: .bold))
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .background(Color(.systemGray6))
-                        .foregroundStyle(.primary)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 1))
-                        .cornerRadius(8)
+                        .foregroundStyle(.white)
+                        .glassCard(12)
                 }
             }
-            Button {
-                showPrintOptions = true
-            } label: {
+            Button { showPrintOptions = true } label: {
                 Label("Print Sheet", systemImage: "printer")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .bold))
                     .frame(maxWidth: .infinity).frame(height: 44)
-                    .background(Color(.systemGray6))
-                    .foregroundStyle(.primary)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.systemGray4), lineWidth: 1))
-                    .cornerRadius(8)
+                    .foregroundStyle(.white)
+                    .glassCard(12)
             }
         }
+        .padding(16)
+        .glassCard(18)
         .padding(.horizontal, 24)
     }
 }

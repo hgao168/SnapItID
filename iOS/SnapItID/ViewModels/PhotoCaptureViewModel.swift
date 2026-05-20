@@ -116,19 +116,58 @@ final class PhotoCaptureViewModel: NSObject, ObservableObject {
                     countryCode: selectedCountry,
                     documentType: selectedDocumentType,
                     rules: rules,
-                    userId: userId
+                    userId: userId,
+                    authToken: AuthService.shared.token
                 )
                 guard let img = result.image else {
                     throw APIError.encoding("AI returned no image")
                 }
-                self.enhancedImage = img
+                // Apply ICAO compliance framing: scale/crop so the head occupies
+                // the correct percentage of the output photo dimensions.
+                self.statusMessage = "Framing head to compliance dimensions…"
+                let framed: UIImage
+                if let r = self.rules {
+                    framed = await PhotoFramingService.applyFraming(
+                        image: img,
+                        rules: r,
+                        documentType: self.selectedDocumentType
+                    )
+                } else {
+                    framed = img
+                }
+                self.enhancedImage = framed
                 self.enhancedModelName = result.model
-                self.statusMessage = "AI enhancement complete (\(result.model))."
                 self.complianceResult = nil
+                self.statusMessage = "AI enhancement complete. Running compliance check on result…"
+
+                // Auto-run compliance on the framed output — mirrors website logic
+                // where Check Compliance always operates on the latest output image.
+                await autoCheckCompliance(on: framed)
             } catch {
                 self.errorMessage = "AI Enhance failed: \(error.localizedDescription)"
                 self.statusMessage = nil
             }
+        }
+    }
+
+    /// Runs a compliance check on a specific image (used after AI enhance).
+    private func autoCheckCompliance(on image: UIImage) async {
+        do {
+            isCheckingCompliance = true
+            defer { isCheckingCompliance = false }
+            let result = try await api.checkCompliance(
+                image: image,
+                countryCode: selectedCountry,
+                documentType: selectedDocumentType,
+                rules: rules
+            )
+            self.complianceResult = result
+            self.statusMessage = result.isCompliant
+                ? "AI photo passes compliance ✓"
+                : "AI photo generated — review compliance results below."
+        } catch {
+            // Non-fatal: compliance check after enhance is best-effort
+            self.statusMessage = "AI enhancement complete (\(enhancedModelName ?? "AI"))."
         }
     }
 

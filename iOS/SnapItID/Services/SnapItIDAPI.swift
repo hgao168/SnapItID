@@ -72,7 +72,8 @@ final class SnapItIDAPI {
         countryCode: String,
         documentType: DocumentType,
         rules: CountryRules?,
-        userId: String?
+        userId: String?,
+        authToken: String? = nil
     ) async throws -> EnhanceResult {
         guard let jpeg = image.jpegData(compressionQuality: 0.9) else {
             throw APIError.encoding("Failed to JPEG-encode image")
@@ -91,6 +92,11 @@ final class SnapItIDAPI {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Bearer token tells the worker the user's tier so paid users
+        // get an unwatermarked AI photo.
+        if let token = authToken, !token.isEmpty {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         req.httpBody = try Self.encoder.encode(payload)
 
         let (data, response) = try await session.data(for: req)
@@ -119,6 +125,45 @@ final class SnapItIDAPI {
         } catch {
             return nil
         }
+    }
+
+    // MARK: - Auth (register / login / fetch profile)
+
+    /// POST /api/payments/register → { id, email, name, tier, token }
+    func register(email: String, password: String, name: String) async throws -> AuthSession {
+        let url = baseURL.appendingPathComponent("/api/payments/register")
+        let body = RegisterPayload(email: email, password: password, name: name)
+        return try await authPostJSON(url: url, body: body)
+    }
+
+    /// POST /api/payments/login → { id, email, name, tier, token }
+    func login(email: String, password: String) async throws -> AuthSession {
+        let url = baseURL.appendingPathComponent("/api/payments/login")
+        let body = LoginPayload(email: email, password: password)
+        return try await authPostJSON(url: url, body: body)
+    }
+
+    /// GET /api/payments/me (Bearer token) → up-to-date user record (tier may have changed)
+    func fetchMe(token: String) async throws -> AuthUser {
+        let url = baseURL.appendingPathComponent("/api/payments/me")
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: req)
+        try Self.ensureOK(response: response, data: data)
+        let envelope = try Self.decoder.decode(APIEnvelope<AuthUser>.self, from: data)
+        return envelope.result
+    }
+
+    private func authPostJSON<Body: Encodable>(url: URL, body: Body) async throws -> AuthSession {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try Self.encoder.encode(body)
+        let (data, response) = try await session.data(for: req)
+        try Self.ensureOK(response: response, data: data)
+        let envelope = try Self.decoder.decode(APIEnvelope<AuthSession>.self, from: data)
+        return envelope.result
     }
 
     // MARK: - Helpers
@@ -158,6 +203,17 @@ private struct CompliancePayload: Encodable {
 
 private struct GuestUserPayload: Encodable {
     let userId: String?
+}
+
+private struct RegisterPayload: Encodable {
+    let email: String
+    let password: String
+    let name: String
+}
+
+private struct LoginPayload: Encodable {
+    let email: String
+    let password: String
 }
 
 private struct PaymentUserRecord: Decodable {

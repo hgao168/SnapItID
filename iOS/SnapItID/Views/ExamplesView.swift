@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Before/after gallery using images served from snapitid.ai/examples/.
+/// Before/after gallery using bundled example images.
 struct ExamplesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -23,14 +23,14 @@ struct ExamplesView: View {
                     tag: "BEFORE",
                     tagColor: Color.white.opacity(0.15),
                     tagText: .white,
-                    url: URL(string: "https://snapitid.ai/examples/beforeImage.png")!,
+                    imageName: "before",
                     caption: "Selfie. Glasses on. Cluttered background."
                 )
                 ExampleCard(
                     tag: "AFTER",
                     tagColor: snapAccent.opacity(0.3),
                     tagText: snapAccent,
-                    url: URL(string: "https://snapitid.ai/examples/SnapItID.png")!,
+                    imageName: "after",
                     caption: "Glasses removed, pure-white background, 35×45 mm @ 300 DPI."
                 )
             }
@@ -43,33 +43,30 @@ private struct ExampleCard: View {
     let tag: String
     let tagColor: Color
     let tagText: Color
-    let url: URL
+    let imageName: String
     let caption: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topLeading) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
+                Image(imageName)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(glassFill)
-                            .overlay(ProgressView().tint(snapAccent))
-                    case .success(let img):
-                        img.resizable().scaledToFill()
-                    case .failure:
+                            .fill(Color.clear)
+                    )
+                    .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(glassFill)
-                            .overlay(Image(systemName: "photo")
-                                .foregroundStyle(.white.opacity(0.3)))
-                    @unknown default:
-                        RoundedRectangle(cornerRadius: 10).fill(glassFill)
-                    }
-                }
+                            .stroke(glassBorder, lineWidth: 1)
+                    )
                 .frame(height: 220)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(glassBorder, lineWidth: 1))
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(glassFill)
+                )
 
                 Text(tag)
                     .font(.system(size: 9, weight: .bold))

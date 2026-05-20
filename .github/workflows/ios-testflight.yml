@@ -18,7 +18,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+        run: |
+          # Use the newest Xcode available on this runner
+          XCODE=$(ls /Applications | grep -E '^Xcode[_.]?[0-9]' | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then
+            sudo xcode-select -s "/Applications/$XCODE/Contents/Developer"
+          fi
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -66,31 +72,12 @@ jobs:
 
       # ── Build ─────────────────────────────────────────────────────────────────
 
-      - name: Generate app icon sizes
+      - name: Generate app icon
         run: |
           SRC="web/images/SnapItID.png"
           DEST="iOS/SnapItID/Assets.xcassets/AppIcon.appiconset"
-          # iPhone
-          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-20@2x.png"
-          sips -z 60  60  "$SRC" --out "$DEST/AppIcon-20@3x.png"
-          sips -z 58  58  "$SRC" --out "$DEST/AppIcon-29@2x.png"
-          sips -z 87  87  "$SRC" --out "$DEST/AppIcon-29@3x.png"
-          sips -z 80  80  "$SRC" --out "$DEST/AppIcon-40@2x.png"
-          sips -z 120 120 "$SRC" --out "$DEST/AppIcon-40@3x.png"
-          sips -z 120 120 "$SRC" --out "$DEST/AppIcon-60@2x.png"
-          sips -z 180 180 "$SRC" --out "$DEST/AppIcon-60@3x.png"
-          # iPad
-          sips -z 20  20  "$SRC" --out "$DEST/AppIcon-ipad-20.png"
-          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-ipad-20@2x.png"
-          sips -z 29  29  "$SRC" --out "$DEST/AppIcon-ipad-29.png"
-          sips -z 58  58  "$SRC" --out "$DEST/AppIcon-ipad-29@2x.png"
-          sips -z 40  40  "$SRC" --out "$DEST/AppIcon-ipad-40.png"
-          sips -z 80  80  "$SRC" --out "$DEST/AppIcon-ipad-40@2x.png"
-          sips -z 76  76  "$SRC" --out "$DEST/AppIcon-76.png"
-          sips -z 152 152 "$SRC" --out "$DEST/AppIcon-76@2x.png"
-          sips -z 167 167 "$SRC" --out "$DEST/AppIcon-83.5@2x.png"
-          # App Store (1024x1024)
-          cp "$SRC" "$DEST/AppIcon-1024.png"
+          # Single universal 1024x1024 icon (Xcode 14+ single-size format)
+          sips -z 1024 1024 "$SRC" --out "$DEST/AppIcon-1024.png"
 
       - name: Archive app
         run: |

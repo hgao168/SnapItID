@@ -1,11 +1,6 @@
 name: iOS Build & Deploy to TestFlight
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'iOS/**'
   workflow_dispatch:
 
 jobs:

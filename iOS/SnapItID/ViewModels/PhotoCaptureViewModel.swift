@@ -167,7 +167,7 @@ final class PhotoCaptureViewModel: NSObject, ObservableObject {
                 : "AI photo generated — review compliance results below."
         } catch {
             // Non-fatal: compliance check after enhance is best-effort
-            self.statusMessage = "AI enhancement complete (\(enhancedModelName ?? "AI"))."
+            self.statusMessage = "AI enhancement complete."
         }
     }
 

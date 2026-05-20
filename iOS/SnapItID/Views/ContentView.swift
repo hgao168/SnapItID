@@ -75,7 +75,12 @@ struct ContentView: View {
                         }
                         statusRow
                         if let result = viewModel.complianceResult {
-                            ComplianceResultView(result: result, rules: viewModel.rules, onDismiss: viewModel.reset)
+                            ComplianceResultView(
+                                result: result,
+                                rules: viewModel.rules,
+                                documentType: viewModel.selectedDocumentType,
+                                onDismiss: viewModel.reset
+                            )
                         }
                         Rectangle()
                             .fill(glassBorder)
@@ -301,13 +306,6 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                if let m = viewModel.enhancedModelName {
-                    Text(m)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Capsule().fill(glassFill).overlay(Capsule().stroke(glassBorder, lineWidth: 1)))
-                }
             }
 
             Image(uiImage: enhanced)

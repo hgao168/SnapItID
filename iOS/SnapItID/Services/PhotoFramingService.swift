@@ -243,10 +243,11 @@ enum PhotoFramingService {
                 let pixelFaceTop    = (1 - face.maxY) * imgH
                 let pixelFaceRight  = face.maxX * imgW
 
-                // Expand the crown: Vision's bounding box top is approximately at the
-                // hairline. Expand upward by ~8% of face height to reach the true crown.
+                // Expand the crown: Vision's face rectangle usually starts near the
+                // forehead/hairline, not the true crown. Use a larger uplift so
+                // top spacing aligns better with country compliance requirements.
                 let faceH       = pixelFaceBottom - pixelFaceTop
-                let headTop     = max(0, pixelFaceTop - faceH * 0.08)
+                let headTop     = max(0, pixelFaceTop - faceH * 0.18)
                 let headBottom  = pixelFaceBottom
                 let headLeft    = pixelFaceLeft
                 let headRight   = pixelFaceRight
@@ -260,10 +261,8 @@ enum PhotoFramingService {
                     fillOutput: true
                 )
 
-                // Slight positive bias matching the website's gpt-image-2 correction
-                let biasX = outW * 0.035
-                let biasY = outH * 0.030
-                image.draw(in: CGRect(x: t.dx + biasX, y: t.dy + biasY,
+                // Draw with pure compliance transform (no model-specific bias).
+                image.draw(in: CGRect(x: t.dx, y: t.dy,
                                       width: t.drawW, height: t.drawH))
             } else {
                 // No face detected: contain-fit centered (same website fallback)

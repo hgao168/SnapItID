@@ -228,6 +228,8 @@ async function runComplianceAnalysis(
   const prompt =
     `You are an ICAO-style passport photo compliance checker for ${countryCode} ${documentType}. ` +
     `Evaluate the photo objectively. ` +
+    `For expression, be strict: set "neutral_expression" to false if you see a smile, grin, raised mouth corners, visible teeth, or a clearly non-neutral expression. ` +
+    `Set "mouth_closed" to false if the mouth is open, teeth are showing, or lips are parted. ` +
     `Set "glasses" to true ONLY if you can clearly see physical eyeglass frames, rims, lenses, ` +
     `or temple arms on the face. Do NOT infer glasses from eye shape, eyelid creases, wrinkles, ` +
     `eyebrows, or shadows. When unsure, set glasses to false. ` +
@@ -284,6 +286,33 @@ async function runComplianceAnalysis(
       // avoid blocking otherwise compliant photos on a single shaky signal.
       parsed.glasses = false;
       parsed.glasses_glare = false;
+    }
+  }
+
+  // Second-opinion pass for neutral expression: if the model claims the face is
+  // neutral, confirm that with a focused smile question. This catches the common
+  // false negative where a visible smile is still marked as neutral.
+  if (parsed && asBool(parsed.neutral_expression, true) && asBool(parsed.mouth_closed, true)) {
+    try {
+      const smileResp: any = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+        image: Array.from(imageData),
+        prompt:
+          'Look at this face only. Is the expression neutral and the mouth closed? ' +
+          'Answer ONLY with YES if it is neutral, or NO if there is any smile, grin, raised mouth corners, visible teeth, or parted lips.',
+        max_tokens: 8,
+      });
+      const smileText: string = typeof smileResp === 'string'
+        ? smileResp
+        : (smileResp?.description ?? smileResp?.response ?? smileResp?.text ?? '');
+      const neutralConfirmed = /\byes\b/i.test(smileText) && !/\bno\b/i.test(smileText);
+      if (!neutralConfirmed) {
+        parsed.neutral_expression = false;
+        parsed.mouth_closed = false;
+      }
+    } catch {
+      // On confirmation failure, fail closed for expression so a smile is not passed as neutral.
+      parsed.neutral_expression = false;
+      parsed.mouth_closed = false;
     }
   }
 

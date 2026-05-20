@@ -19,9 +19,12 @@ struct ComplianceResultView: View {
         return documentType == .visa ? rules.visaSize : rules.passportSize
     }
 
-    private func hasIssue(_ categories: Set<IssueCategory>) -> Bool {
-        result.issues.contains {
-            categories.contains($0.category) && $0.severity != .info
+    private func hasIssue(_ categories: Set<IssueCategory>, matching keywords: [String] = []) -> Bool {
+        result.issues.contains { issue in
+            guard issue.severity != .info else { return false }
+            if categories.contains(issue.category) { return true }
+            let text = (issue.description + " " + (issue.suggestion ?? "")).lowercased()
+            return keywords.contains { text.contains($0.lowercased()) }
         }
     }
 
@@ -39,14 +42,14 @@ struct ComplianceResultView: View {
 
         if let size = selectedSize {
             checks.append(RuleCheck(label: "Photo size: \(size.width)×\(size.height) mm", passes: true))
-            checks.append(RuleCheck(label: "Head height target: \(size.headHeight) px", passes: !hasIssue([.headSize, .eyePosition])))
+            checks.append(RuleCheck(label: "Head height target: \(size.headHeight) px", passes: !hasIssue([.headSize, .eyePosition], matching: ["head size", "eye", "face too small", "face too large"])))
         }
 
-        checks.append(RuleCheck(label: "Background: \(rules.backgroundColorRequirement.displayName)", passes: !hasIssue([.background])))
-        checks.append(RuleCheck(label: "Minimum resolution: \(rules.minResolution) MP", passes: !hasIssue([.resolution])))
-        checks.append(RuleCheck(label: rules.smileAllowed ? "Smile allowed" : "Neutral expression required", passes: rules.smileAllowed || !hasIssue([.smileDetection])))
-        checks.append(RuleCheck(label: rules.glassesAllowed ? "Glasses allowed" : "No glasses", passes: rules.glassesAllowed || !hasIssue([.glassesForbidden, .glassesReflection])))
-        checks.append(RuleCheck(label: rules.headCoverageAllowed ? "Head covering allowed" : "No head covering", passes: rules.headCoverageAllowed || !hasIssue([.headCoverForbidden])))
+        checks.append(RuleCheck(label: "Background: \(rules.backgroundColorRequirement.displayName)", passes: !hasIssue([.background], matching: ["background", "plain", "uniform"])))
+        checks.append(RuleCheck(label: "Minimum resolution: \(rules.minResolution) MP", passes: !hasIssue([.resolution], matching: ["resolution", "small", "low resolution"])))
+        checks.append(RuleCheck(label: rules.smileAllowed ? "Smile allowed" : "Neutral expression required", passes: rules.smileAllowed || !hasIssue([.smileDetection], matching: ["neutral", "smile", "mouth closed", "teeth"])))
+        checks.append(RuleCheck(label: rules.glassesAllowed ? "Glasses allowed" : "No glasses", passes: rules.glassesAllowed || !hasIssue([.glassesForbidden, .glassesReflection], matching: ["glasses", "spectacles", "eyeglasses", "remove glasses", "glare"])))
+        checks.append(RuleCheck(label: rules.headCoverageAllowed ? "Head covering allowed" : "No head covering", passes: rules.headCoverageAllowed || !hasIssue([.headCoverForbidden], matching: ["head covering", "covering"])))
 
         return checks
     }

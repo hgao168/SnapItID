@@ -22,10 +22,6 @@ interface ComplianceRequest {
 
 type UserTier = 'free' | 'pro' | 'lifetime';
 
-interface UserRecord {
-  id: string;
-  tier: UserTier;
-}
 
 interface ComplianceIssue {
   id: string;
@@ -296,9 +292,9 @@ async function runComplianceAnalysis(
   } else if (issues.length === 0) {
     issues.push({
       id: 'ai_parse',
-      severity: 'WARNING',
+      severity: 'INFO',
       category: 'AI_SERVICE',
-      description: 'AI returned a non-JSON response — compliance attributes could not be evaluated.',
+      description: 'AI analysis was partial, so only rule-based checks were used for this photo.',
     });
   }
 
@@ -336,10 +332,10 @@ function mapAIFindingsToIssues(
   rules?: CountryRules
 ): void {
   if (!asBool(a.face_detected)) {
-    issues.push({ id: 'face_missing', severity: 'CRITICAL', category: 'FACE_DETECTION', description: 'No face detected in the photo.' });
+    issues.push({ id: 'face_missing', severity: 'CRITICAL', category: 'FACE', description: 'No face detected in the photo.' });
   }
   if (asBool(a.face_detected) && !asBool(a.single_face)) {
-    issues.push({ id: 'multi_face', severity: 'CRITICAL', category: 'FACE_DETECTION', description: 'More than one face detected.' });
+    issues.push({ id: 'multi_face', severity: 'CRITICAL', category: 'FACE', description: 'More than one face detected.' });
   }
   if (!asBool(a.facing_forward)) {
     issues.push({ id: 'not_forward', severity: 'CRITICAL', category: 'EYE_POSITION', description: 'Subject is not facing the camera directly.' });
@@ -348,12 +344,12 @@ function mapAIFindingsToIssues(
     issues.push({ id: 'eyes_closed', severity: 'CRITICAL', category: 'EYE_POSITION', description: 'Eyes are not fully open.' });
   }
   if (!asBool(a.neutral_expression) || !asBool(a.mouth_closed)) {
-    issues.push({ id: 'expression', severity: 'WARNING', category: 'EXPRESSION', description: 'Expression is not neutral with mouth closed.' });
+    issues.push({ id: 'expression', severity: 'WARNING', category: 'SMILE_DETECTED', description: 'Expression is not neutral with mouth closed.' });
   }
   // Glasses: flag as CRITICAL if detected and country rule forbids them; otherwise flag glare.
   if (asBool(a.glasses, false)) {
     if (rules && rules.glassesAllowed === false) {
-      issues.push({ id: 'glasses_forbidden', severity: 'CRITICAL', category: 'GLASSES', description: 'Glasses are not allowed for this country/document type. Please remove glasses.', suggestion: 'Remove glasses and retake the photo, or use AI Enhance to remove them.' });
+      issues.push({ id: 'glasses_forbidden', severity: 'CRITICAL', category: 'GLASSES_FORBIDDEN', description: 'Glasses are not allowed for this country/document type. Please remove glasses.', suggestion: 'Remove glasses and retake the photo, or use AI Enhance to remove them.' });
     } else if (asBool(a.glasses_glare, false)) {
       issues.push({ id: 'glare', severity: 'WARNING', category: 'GLASSES_REFLECTION', description: 'Glare detected on glasses.' });
     }
@@ -361,22 +357,22 @@ function mapAIFindingsToIssues(
   // Head covering: CRITICAL if country forbids it, WARNING otherwise.
   if (asBool(a.head_covering, false)) {
     if (rules && rules.headCoverageAllowed === false) {
-      issues.push({ id: 'head_cover_forbidden', severity: 'CRITICAL', category: 'HEAD_COVERING', description: 'Head covering is not allowed for this country/document type.' });
+      issues.push({ id: 'head_cover_forbidden', severity: 'CRITICAL', category: 'HEAD_COVER_FORBIDDEN', description: 'Head covering is not allowed for this country/document type.' });
     } else {
-      issues.push({ id: 'head_cover', severity: 'WARNING', category: 'HEAD_COVERING', description: 'Head covering detected (allowed only for religious reasons in some countries).' });
+      issues.push({ id: 'head_cover', severity: 'WARNING', category: 'HEAD_COVER_FORBIDDEN', description: 'Head covering detected (allowed only for religious reasons in some countries).' });
     }
   }
   if (asBool(a.shadows_on_face, false)) {
-    issues.push({ id: 'shadows', severity: 'WARNING', category: 'LIGHTING', description: 'Shadows visible on the face.' });
+    issues.push({ id: 'shadows', severity: 'WARNING', category: 'SHADOW_DETECTED', description: 'Shadows visible on the face.' });
   }
   if (!asBool(a.plain_background) || !asBool(a.background_uniform_color)) {
-    issues.push({ id: 'bg', severity: 'WARNING', category: 'BACKGROUND_DETECTED', description: 'Background is not plain / uniform.' });
+    issues.push({ id: 'bg', severity: 'WARNING', category: 'BACKGROUND', description: 'Background is not plain / uniform.' });
   }
   if (!asBool(a.head_size_ok)) {
     issues.push({ id: 'head_size', severity: 'WARNING', category: 'HEAD_SIZE', description: 'Head size appears outside the required range.' });
   }
   if (!asBool(a.image_sharp)) {
-    issues.push({ id: 'sharpness', severity: 'WARNING', category: 'SHARPNESS', description: 'Image is blurry or not sharp.' });
+    issues.push({ id: 'sharpness', severity: 'WARNING', category: 'EXPOSURE', description: 'Image is blurry or not sharp.' });
   }
 }
 
@@ -405,10 +401,10 @@ function generateRecommendations(issues: ComplianceIssue[]): string[] {
   if (categories.has('EYE_POSITION')) {
     recommendations.push('Look directly at the camera with eyes open');
   }
-  if (categories.has('BACKGROUND_DETECTED')) {
+  if (categories.has('BACKGROUND')) {
     recommendations.push('Use a plain white or light neutral background');
   }
-  if (categories.has('LIGHTING')) {
+  if (categories.has('SHADOW_DETECTED')) {
     recommendations.push('Ensure proper lighting without shadows on face');
   }
   if (categories.has('GLASSES_REFLECTION')) {
@@ -496,7 +492,7 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
     `This is for a ${countryCode || 'international'} ${documentType.toLowerCase()} ID photo.`;
 
   const form = new FormData();
-  form.append('image', new Blob([bytes as unknown as BlobPart], { type: 'image/png' }), 'photo.png');
+  form.append('image', new Blob([bytes], { type: 'image/png' }), 'photo.png');
   form.append('model', 'gpt-image-2');
   form.append('prompt', prompt);
   form.append('size', '1024x1024');
@@ -568,21 +564,6 @@ function extractTierFromToken(token: string): UserTier {
     // If any error in token parsing/decoding, default to free tier
   }
   
-  return 'free';
-}
-
-async function resolveUserTier(env: Env, userId?: string): Promise<UserTier> {
-  const id = (userId || '').trim();
-  if (!id) return 'free';
-
-  try {
-    const raw = await env.SNAPITID_KV.get(`users:${id}`);
-    if (!raw) return 'free';
-    const user = JSON.parse(raw) as UserRecord;
-    if (user.tier === 'pro' || user.tier === 'lifetime') return user.tier;
-  } catch {
-    // Fail closed to free tier if KV read/parse fails.
-  }
   return 'free';
 }
 

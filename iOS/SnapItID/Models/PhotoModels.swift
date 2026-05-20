@@ -43,7 +43,12 @@ struct ComplianceResult: Codable, Identifiable {
 
     /// Computed confidence label, matching the web UI semantics.
     var confidenceLabel: String {
-        if issues.contains(where: { $0.category == .aiService }) { return "LOW" }
+        let meaningfulIssues = issues.filter { $0.category != .aiService }
+        if meaningfulIssues.isEmpty {
+            if complianceScore >= 90 { return "HIGH" }
+            if complianceScore >= 75 { return "MEDIUM" }
+            return "LOW"
+        }
         if complianceScore >= 90 { return "HIGH" }
         if complianceScore >= 75 { return "MEDIUM" }
         return "LOW"

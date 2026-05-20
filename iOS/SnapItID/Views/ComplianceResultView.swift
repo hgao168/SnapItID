@@ -25,6 +25,14 @@ struct ComplianceResultView: View {
         }
     }
 
+    private var analysisNote: ComplianceIssue? {
+        result.issues.first(where: { $0.category == .aiService })
+    }
+
+    private var displayIssues: [ComplianceIssue] {
+        result.issues.filter { $0.category != .aiService }
+    }
+
     private var ruleChecks: [RuleCheck] {
         var checks: [RuleCheck] = []
         guard let rules else { return checks }
@@ -94,7 +102,7 @@ struct ComplianceResultView: View {
                 Spacer()
                 HStack(spacing: 10) {
                     statPill("Confidence", result.confidenceLabel)
-                    statPill("Issues", "\(result.issues.count)")
+                    statPill("Issues", "\(displayIssues.count)")
                 }
             }
             .foregroundStyle(statusColor)
@@ -135,14 +143,39 @@ struct ComplianceResultView: View {
             }
 
             // ── Issues ───────────────────────────────────────────────────────
-            if !result.issues.isEmpty {
+            if !displayIssues.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("ISSUES")
                         .font(.system(size: 10, weight: .semibold))
                         .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.4))
-                    ForEach(result.issues) { IssueRowView(issue: $0) }
+                    ForEach(displayIssues) { IssueRowView(issue: $0) }
                 }
+            }
+
+            if let note = analysisNote {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(snapAccent)
+                        .font(.system(size: 12, weight: .bold))
+                        .padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Analysis note")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(.white.opacity(0.45))
+                        Text(note.description)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(glassFill)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(glassBorder, lineWidth: 1))
+                )
             }
 
             // ── Recommendations ──────────────────────────────────────────────

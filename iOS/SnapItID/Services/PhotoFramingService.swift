@@ -247,7 +247,7 @@ enum PhotoFramingService {
                 // forehead/hairline, not the true crown. Use a larger uplift so
                 // top spacing aligns better with country compliance requirements.
                 let faceH       = pixelFaceBottom - pixelFaceTop
-                let headTop     = max(0, pixelFaceTop - faceH * 0.18)
+                let headTop     = max(0, pixelFaceTop - faceH * 0.26)
                 let headBottom  = pixelFaceBottom
                 let headLeft    = pixelFaceLeft
                 let headRight   = pixelFaceRight
@@ -261,8 +261,10 @@ enum PhotoFramingService {
                     fillOutput: true
                 )
 
-                // Draw with pure compliance transform (no model-specific bias).
-                image.draw(in: CGRect(x: t.dx, y: t.dy,
+                // Keep a small downward bias to preserve top spacing on tight crops.
+                let biasX = outW * 0.020
+                let biasY = outH * 0.030
+                image.draw(in: CGRect(x: t.dx + biasX, y: t.dy + biasY,
                                       width: t.drawW, height: t.drawH))
             } else {
                 // No face detected: contain-fit centered (same website fallback)

@@ -270,9 +270,7 @@ async function runComplianceAnalysis(
       const confirmResp: any = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
         image: Array.from(imageData),
         prompt:
-          'Look at this face. Are there any physical eyeglasses, spectacles, sunglasses, or ' +
-          'eyewear with visible frames, rims, lenses, or temple arms on or in front of the eyes? ' +
-          'Answer ONLY with the single word YES or NO.',
+          'Are there any eyeglasses, sunglasses, or spectacles visible on the face? Look for frames, rims, lenses, or temple arms. Ignore shadows or reflections. Answer ONLY with the single word YES or NO.',
         max_tokens: 8,
       });
       const confirmText: string = typeof confirmResp === 'string'
@@ -283,7 +281,7 @@ async function runComplianceAnalysis(
         parsed.glasses = false;
         parsed.glasses_glare = false;
       }
-    } catch {
+    } catch (error) {
       // If confirmation fails, be conservative and drop the glasses flag to
       // avoid blocking otherwise compliant photos on a single shaky signal.
       parsed.glasses = false;
@@ -374,8 +372,15 @@ function mapAIFindingsToIssues(
   if (!asBool(a.eyes_open)) {
     issues.push({ id: 'eyes_closed', severity: 'CRITICAL', category: 'EYE_POSITION', description: 'Eyes are not fully open.' });
   }
-  if (!asBool(a.neutral_expression) || !asBool(a.mouth_closed)) {
-    issues.push({ id: 'expression', severity: 'WARNING', category: 'SMILE_DETECTED', description: 'Expression is not neutral with mouth closed.' });
+  if (!rules?.smileAllowed) {
+    if (!asBool(a.neutral_expression) || !asBool(a.mouth_closed)) {
+      issues.push({
+        id: 'expression',
+        severity: 'WARNING',
+        category: 'SMILE_DETECTED',
+        description: 'Expression is not neutral with mouth closed.',
+      });
+    }
   }
   // Glasses: flag as CRITICAL if detected and country rule forbids them; otherwise flag glare.
   if (asBool(a.glasses, false)) {

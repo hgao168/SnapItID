@@ -76,10 +76,11 @@ struct PhotoSelectionView: View {
                                 showCamera = true
                             } else { showPhotoPicker = true }
                         }
-                        photoActionBtn("Choose", icon: "photo.on.rectangle", gradient: false) {
+                        photoActionBtn("Choose", icon: "photo.on.rectangle", gradient: true) {
                             showPhotoPicker = true
                         }
                     }
+                    .foregroundColor(.blue) // Set active light blue color for both buttons
                 }
             }
         }

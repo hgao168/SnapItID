@@ -77,7 +77,7 @@ struct ComplianceResultView: View {
         checks.append(RuleCheck(
             label: rules.glassesAllowed ? "Glasses allowed" : "No glasses",
             state: rules.glassesAllowed ? .pass
-                : aiCheck(!hasIssue([.glassesForbidden, .glassesReflection], matching: ["glasses", "spectacles", "eyeglasses", "remove glasses", "glare"]))
+                : aiCheck(!hasIssue([.glassesForbidden, .glassesReflection], matching: ["glasses", "spectacles", "eyeglasses", "remove glasses", "glare", "frames", "lenses", "temple arms"]))
         ))
         checks.append(RuleCheck(
             label: rules.headCoverageAllowed ? "Head covering allowed" : "No head covering",

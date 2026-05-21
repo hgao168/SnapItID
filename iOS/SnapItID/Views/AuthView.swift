@@ -14,6 +14,8 @@ struct AuthView: View {
     @State private var name = ""
     @State private var isWorking = false
     @State private var errorText: String?
+    @StateObject private var purchases = PurchaseService.shared
+    @State private var billingMessage: String?
 
     var body: some View {
         ZStack {
@@ -66,11 +68,13 @@ struct AuthView: View {
                     .opacity(canSubmit ? 1 : 0.55)
 
                     benefits
+                    billingSection
                 }
                 .padding(22)
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .task { await purchases.loadProducts() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Close") { dismiss() }
@@ -171,6 +175,136 @@ struct AuthView: View {
         .glassCard(14)
     }
 
+    private var billingSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("PLANS")
+                    .font(.system(size: 10, weight: .semibold)).tracking(1.4)
+                    .foregroundStyle(.white.opacity(0.4))
+                Spacer()
+                if purchases.isLoading {
+                    ProgressView().scaleEffect(0.8)
+                }
+            }
+
+            planRow(
+                title: "Free",
+                subtitle: "Basic countries, watermark on AI preview",
+                price: "$0",
+                isCurrent: auth.tier == .free,
+                buttonTitle: "Current Plan",
+                action: nil
+            )
+
+            planRow(
+                title: "Pro",
+                subtitle: "All countries, watermark-free output",
+                price: purchases.proProduct?.displayPrice ?? "$4.99 / month",
+                isCurrent: auth.tier == .pro,
+                buttonTitle: auth.tier == .pro ? "Current Plan" : "Subscribe"
+            ) {
+                purchase(.pro)
+            }
+
+            planRow(
+                title: "Lifetime",
+                subtitle: "One-time unlock, never expires",
+                price: purchases.lifetimeProduct?.displayPrice ?? "$24.99 one-time",
+                isCurrent: auth.tier == .lifetime,
+                buttonTitle: auth.tier == .lifetime ? "Current Plan" : "Buy Lifetime"
+            ) {
+                purchase(.lifetime)
+            }
+
+            Button("Restore Purchases") {
+                Task {
+                    do {
+                        try await purchases.restorePurchases(auth: auth)
+                        billingMessage = "Purchases restored successfully."
+                    } catch {
+                        billingMessage = error.localizedDescription
+                    }
+                }
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(snapAccent)
+            .disabled(!auth.isAuthenticated)
+            .opacity(auth.isAuthenticated ? 1 : 0.5)
+
+            if !auth.isAuthenticated {
+                Text("Sign in first to purchase and sync your plan.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+
+            if let message = billingMessage {
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .glassCard(14)
+    }
+
+    @ViewBuilder
+    private func planRow(
+        title: String,
+        subtitle: String,
+        price: String,
+        isCurrent: Bool,
+        buttonTitle: String,
+        action: (() -> Void)?
+    ) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.55))
+                Text(price)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(snapAccent)
+            }
+            Spacer()
+            if let action {
+                Button(buttonTitle) { action() }
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(isCurrent ? .white.opacity(0.6) : .black.opacity(0.85))
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(
+                        Group {
+                            if isCurrent {
+                                glassFill
+                            } else {
+                                LinearGradient(colors: [snapAccent, snapAccent2],
+                                               startPoint: .leading,
+                                               endPoint: .trailing)
+                            }
+                        }
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                    .disabled(isCurrent || !auth.isAuthenticated)
+                    .opacity((isCurrent || !auth.isAuthenticated) ? 0.7 : 1)
+            } else {
+                Text(buttonTitle)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.horizontal, 10)
+                    .frame(height: 32)
+                    .background(glassFill)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(glassBorder, lineWidth: 1))
+    }
+
     @ViewBuilder
     private func benefitRow(_ text: String) -> some View {
         HStack(spacing: 8) {
@@ -205,6 +339,17 @@ struct AuthView: View {
                 dismiss()
             } catch {
                 errorText = error.localizedDescription
+            }
+        }
+    }
+
+    private func purchase(_ tier: UserTier) {
+        Task {
+            do {
+                try await purchases.purchase(plan: tier, auth: auth)
+                billingMessage = "You're now on the \(auth.tier.displayName) plan."
+            } catch {
+                billingMessage = error.localizedDescription
             }
         }
     }

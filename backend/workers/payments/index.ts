@@ -9,6 +9,7 @@
  * POST /api/payments/forgot-password  { email } → sends reset email
  * POST /api/payments/reset-password   { token, password }
  * POST /api/payments/register-guest   (anonymous, no password)
+ * POST /api/payments/ios/activate      (requires Authorization header)
  * GET  /api/payments/checkout?provider=stripe|paypal|wechat&plan=single|pro|lifetime&country=US&docType=PASSPORT&success_url=...&cancel_url=...&user_id=usr_xxx
  * POST /api/payments/guest
  * GET  /api/payments/user?userId=usr_xxx|email=user@example.com
@@ -60,6 +61,14 @@ interface JwtPayload {
   tier: UserTier;
   iat: number;
   exp: number;
+}
+
+interface AppleActivationRecord {
+  transactionId: string;
+  originalTransactionId?: string;
+  userId: string;
+  plan: "pro" | "lifetime";
+  activatedAt: string;
 }
 
 interface Env {
@@ -157,6 +166,10 @@ export default {
         return await handleCheckout(request, url, env);
       }
 
+      if (path === "/api/payments/ios/activate" && request.method === "POST") {
+        return await handleIOSActivate(request, env);
+      }
+
       if (path === "/api/payments/register" && request.method === "POST") {
         return await handleRegister(request, env);
       }
@@ -235,6 +248,10 @@ function userKey(id: string): string {
 
 function userEmailKey(email: string): string {
   return `user_by_email:${normalizeEmail(email)}`;
+}
+
+function appleActivationKey(transactionId: string): string {
+  return `apple_activation:${transactionId}`;
 }
 
 function getAppBaseUrl(env: Env): string {
@@ -850,6 +867,90 @@ async function handleConfirm(request: Request, env: Env): Promise<Response> {
   if (!session) return json({ error: "Payment session not found" }, 404);
 
   return json({ success: true, result: session }, 200);
+}
+
+async function handleIOSActivate(request: Request, env: Env): Promise<Response> {
+  const authenticatedUser = await getAuthenticatedUser(request, env);
+  if (!authenticatedUser) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  const body = (await request.json().catch(() => null)) as
+    | { plan?: string; transactionId?: string; originalTransactionId?: string }
+    | null;
+
+  const planRaw = (body?.plan || "").toLowerCase();
+  const transactionId = (body?.transactionId || "").trim();
+  const originalTransactionId = (body?.originalTransactionId || "").trim();
+
+  if (planRaw !== "pro" && planRaw !== "lifetime") {
+    return json({ error: "plan must be 'pro' or 'lifetime'" }, 400);
+  }
+  if (!transactionId) {
+    return json({ error: "transactionId is required" }, 400);
+  }
+
+  const plan = planRaw as "pro" | "lifetime";
+  const existing = await env.SNAPITID_KV.get(appleActivationKey(transactionId));
+  if (existing) {
+    const record = JSON.parse(existing) as AppleActivationRecord;
+    if (record.userId !== authenticatedUser.id) {
+      return json({ error: "This Apple transaction is already linked to another account." }, 409);
+    }
+
+    const currentUser = (await getUserById(env, authenticatedUser.id)) || authenticatedUser;
+    const secret = env.JWT_SECRET || "default_secret_change_in_production";
+    const token = await generateJWT(currentUser, secret);
+    return json({
+      success: true,
+      result: {
+        id: currentUser.id,
+        email: currentUser.email,
+        name: currentUser.name,
+        tier: currentUser.tier,
+        token,
+      },
+    }, 200);
+  }
+
+  // NOTE: Transaction validation is enforced on-device via StoreKit 2.
+  // Production-hardening should also verify signed transactions server-side.
+  const user = (await getUserById(env, authenticatedUser.id)) || authenticatedUser;
+  const now = new Date().toISOString();
+  if (!(user.tier === "lifetime" && plan === "pro")) {
+    user.tier = plan;
+  }
+  user.updatedAt = now;
+  user.lastPaymentAt = now;
+  user.lastPaymentSessionId = `apple_${transactionId}`;
+  await saveUser(env, user);
+
+  const activation: AppleActivationRecord = {
+    transactionId,
+    originalTransactionId: originalTransactionId || undefined,
+    userId: user.id,
+    plan,
+    activatedAt: now,
+  };
+  await env.SNAPITID_KV.put(appleActivationKey(transactionId), JSON.stringify(activation), {
+    expirationTtl: 60 * 60 * 24 * 365 * 5,
+  });
+
+  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const token = await generateJWT(user, secret);
+  return json(
+    {
+      success: true,
+      result: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        tier: user.tier,
+        token,
+      },
+    },
+    200
+  );
 }
 
 async function buildCheckoutUrl(

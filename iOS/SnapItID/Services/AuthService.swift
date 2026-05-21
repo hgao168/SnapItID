@@ -42,6 +42,10 @@ final class AuthService: ObservableObject {
         try persist(session: session)
     }
 
+    func applyPurchasedSession(_ session: AuthSession) throws {
+        try persist(session: session)
+    }
+
     /// Pulls the latest user record from /api/payments/me — picks up tier upgrades
     /// performed via the web checkout while the user has been logged in on iOS.
     func refresh() async {

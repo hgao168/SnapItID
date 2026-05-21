@@ -159,6 +159,30 @@ final class SnapItIDAPI {
         return envelope.result
     }
 
+    /// POST /api/payments/ios/activate (Bearer token) → refreshed auth session
+    /// containing the updated tier and a new JWT.
+    func activateApplePlan(
+        plan: UserTier,
+        transactionId: String,
+        originalTransactionId: String?,
+        token: String
+    ) async throws -> AuthSession {
+        let url = baseURL.appendingPathComponent("/api/payments/ios/activate")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.httpBody = try Self.encoder.encode(ApplePlanActivatePayload(
+            plan: plan.rawValue,
+            transactionId: transactionId,
+            originalTransactionId: originalTransactionId
+        ))
+        let (data, response) = try await session.data(for: req)
+        try Self.ensureOK(response: response, data: data)
+        let envelope = try Self.decoder.decode(APIEnvelope<AuthSession>.self, from: data)
+        return envelope.result
+    }
+
     private func authPostJSON<Body: Encodable>(url: URL, body: Body) async throws -> AuthSession {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -236,6 +260,12 @@ private struct RegisterPayload: Encodable {
 private struct LoginPayload: Encodable {
     let email: String
     let password: String
+}
+
+private struct ApplePlanActivatePayload: Encodable {
+    let plan: String
+    let transactionId: String
+    let originalTransactionId: String?
 }
 
 private struct PaymentUserRecord: Decodable {

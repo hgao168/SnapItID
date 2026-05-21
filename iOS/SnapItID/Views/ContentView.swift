@@ -161,18 +161,15 @@ struct ContentView: View {
                 Section {
                     Text("Plan: \(u.tier.displayName)")
                     if !u.tier.isPaid {
-                        Link("Upgrade to Premium",
-                             destination: URL(string: "https://snapitid.ai/#pricing")!)
-                        Link("Get Lifetime",
-                             destination: URL(string: "https://snapitid.ai/#pricing")!)
+                        Button("Upgrade to Premium") { showAuth = true }
+                        Button("Get Lifetime") { showAuth = true }
                     }
                     Button("Refresh status") { Task { await auth.refresh() } }
                 }
                 Button("Sign out", role: .destructive) { auth.logout() }
             } else {
                 Button("Sign in / Register") { showAuth = true }
-                Link("View plans",
-                     destination: URL(string: "https://snapitid.ai/#pricing")!)
+                Button("View plans") { showAuth = true }
             }
         } label: {
             HStack(spacing: 6) {

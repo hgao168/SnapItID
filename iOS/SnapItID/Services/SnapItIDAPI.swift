@@ -163,6 +163,7 @@ final class SnapItIDAPI {
     /// containing the updated tier and a new JWT.
     func activateApplePlan(
         plan: UserTier,
+        productId: String,
         transactionId: String,
         originalTransactionId: String?,
         token: String
@@ -174,6 +175,7 @@ final class SnapItIDAPI {
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.httpBody = try Self.encoder.encode(ApplePlanActivatePayload(
             plan: plan.rawValue,
+            productId: productId,
             transactionId: transactionId,
             originalTransactionId: originalTransactionId
         ))
@@ -264,6 +266,7 @@ private struct LoginPayload: Encodable {
 
 private struct ApplePlanActivatePayload: Encodable {
     let plan: String
+    let productId: String
     let transactionId: String
     let originalTransactionId: String?
 }

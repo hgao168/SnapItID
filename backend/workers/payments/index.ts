@@ -71,6 +71,16 @@ interface AppleActivationRecord {
   activatedAt: string;
 }
 
+interface AppleTransactionPayload {
+  transactionId?: string;
+  originalTransactionId?: string;
+  productId?: string;
+  bundleId?: string;
+  environment?: string;
+  expiresDate?: number | string;
+  revocationDate?: number | string;
+}
+
 interface Env {
   SNAPITID_KV: any; // KVNamespace
 
@@ -114,6 +124,14 @@ interface Env {
 
   // JWT authentication
   JWT_SECRET?: string;
+
+  // Apple IAP server-side verification (App Store Server API)
+  APPLE_IAP_ISSUER_ID?: string;
+  APPLE_IAP_KEY_ID?: string;
+  APPLE_IAP_PRIVATE_KEY?: string;
+  APPLE_IAP_BUNDLE_ID?: string;
+  APPLE_IAP_PRODUCT_ID_PRO?: string;
+  APPLE_IAP_PRODUCT_ID_LIFETIME?: string;
 }
 
 const PLAN_TABLE: Record<BillingPlan, PlanInfo> = {
@@ -252,6 +270,10 @@ function userEmailKey(email: string): string {
 
 function appleActivationKey(transactionId: string): string {
   return `apple_activation:${transactionId}`;
+}
+
+function appleOriginalActivationKey(originalTransactionId: string): string {
+  return `apple_activation_original:${originalTransactionId}`;
 }
 
 function getAppBaseUrl(env: Env): string {
@@ -393,6 +415,153 @@ async function hmacKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
     false,
     usage
   );
+}
+
+function parsePemPrivateKey(pemRaw: string): ArrayBuffer {
+  const pem = pemRaw.replace(/\\n/g, "\n").trim();
+  const base64 = pem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\s+/g, "");
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return bytes.buffer;
+}
+
+function asn1ReadLength(bytes: Uint8Array, offset: number): { length: number; next: number } {
+  const first = bytes[offset];
+  if ((first & 0x80) === 0) {
+    return { length: first, next: offset + 1 };
+  }
+  const octets = first & 0x7f;
+  let length = 0;
+  for (let i = 0; i < octets; i++) {
+    length = (length << 8) | bytes[offset + 1 + i];
+  }
+  return { length, next: offset + 1 + octets };
+}
+
+function derEcdsaToJose(signature: ArrayBuffer, size = 32): Uint8Array {
+  const bytes = new Uint8Array(signature);
+  let idx = 0;
+  if (bytes[idx++] !== 0x30) {
+    throw new Error("Invalid DER signature format");
+  }
+  const seqLen = asn1ReadLength(bytes, idx);
+  idx = seqLen.next;
+  const seqEnd = idx + seqLen.length;
+
+  if (bytes[idx++] !== 0x02) throw new Error("Invalid DER R marker");
+  const rLenObj = asn1ReadLength(bytes, idx);
+  idx = rLenObj.next;
+  let r = bytes.slice(idx, idx + rLenObj.length);
+  idx += rLenObj.length;
+
+  if (bytes[idx++] !== 0x02) throw new Error("Invalid DER S marker");
+  const sLenObj = asn1ReadLength(bytes, idx);
+  idx = sLenObj.next;
+  let s = bytes.slice(idx, idx + sLenObj.length);
+  idx += sLenObj.length;
+
+  if (idx !== seqEnd) {
+    throw new Error("Invalid DER signature length");
+  }
+
+  while (r.length > 0 && r[0] === 0) r = r.slice(1);
+  while (s.length > 0 && s[0] === 0) s = s.slice(1);
+  if (r.length > size || s.length > size) {
+    throw new Error("Invalid DER signature integer size");
+  }
+
+  const out = new Uint8Array(size * 2);
+  out.set(r, size - r.length);
+  out.set(s, size * 2 - s.length);
+  return out;
+}
+
+function b64urlDecode(input: string): string {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return atob(padded);
+}
+
+function decodeJWSPayload<T>(jws: string): T | null {
+  const parts = jws.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const raw = b64urlDecode(parts[1]);
+    const utf8 = decodeURIComponent(escape(raw));
+    return JSON.parse(utf8) as T;
+  } catch {
+    return null;
+  }
+}
+
+function appleExpectedProductId(plan: "pro" | "lifetime", env: Env): string {
+  if (plan === "pro") return env.APPLE_IAP_PRODUCT_ID_PRO || "ai.snapitid.pro.monthly";
+  return env.APPLE_IAP_PRODUCT_ID_LIFETIME || "ai.snapitid.lifetime";
+}
+
+async function generateAppleServerToken(env: Env): Promise<string> {
+  const issuerId = (env.APPLE_IAP_ISSUER_ID || "").trim();
+  const keyId = (env.APPLE_IAP_KEY_ID || "").trim();
+  const privateKey = (env.APPLE_IAP_PRIVATE_KEY || "").trim();
+  const bundleId = (env.APPLE_IAP_BUNDLE_ID || "").trim();
+
+  if (!issuerId || !keyId || !privateKey || !bundleId) {
+    throw new Error("Apple IAP server verification is not configured.");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64urlEncode(JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }));
+  const payload = b64urlEncode(JSON.stringify({
+    iss: issuerId,
+    iat: now,
+    exp: now + 60 * 5,
+    aud: "appstoreconnect-v1",
+    bid: bundleId,
+  }));
+
+  const signingInput = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    parsePemPrivateKey(privateKey),
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"]
+  );
+  const der = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    new TextEncoder().encode(signingInput)
+  );
+  const jose = derEcdsaToJose(der);
+  return `${signingInput}.${b64url(jose.buffer)}`;
+}
+
+async function fetchAppleTransactionPayload(
+  transactionId: string,
+  env: Env
+): Promise<AppleTransactionPayload | null> {
+  const token = await generateAppleServerToken(env);
+  const endpoints = [
+    "https://api.storekit.itunes.apple.com",
+    "https://api.storekit-sandbox.itunes.apple.com",
+  ];
+
+  for (const base of endpoints) {
+    const resp = await fetch(`${base}/inApps/v1/transactions/${encodeURIComponent(transactionId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!resp.ok) continue;
+    const data = (await resp.json().catch(() => null)) as { signedTransactionInfo?: string } | null;
+    if (!data?.signedTransactionInfo) continue;
+    const payload = decodeJWSPayload<AppleTransactionPayload>(data.signedTransactionInfo);
+    if (payload?.transactionId) return payload;
+  }
+
+  return null;
 }
 
 async function generateJWT(user: UserRecord, secret: string): Promise<string> {
@@ -876,10 +1045,11 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { plan?: string; transactionId?: string; originalTransactionId?: string }
+    | { plan?: string; productId?: string; transactionId?: string; originalTransactionId?: string }
     | null;
 
   const planRaw = (body?.plan || "").toLowerCase();
+  const productId = (body?.productId || "").trim();
   const transactionId = (body?.transactionId || "").trim();
   const originalTransactionId = (body?.originalTransactionId || "").trim();
 
@@ -889,8 +1059,16 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
   if (!transactionId) {
     return json({ error: "transactionId is required" }, 400);
   }
+  if (!productId) {
+    return json({ error: "productId is required" }, 400);
+  }
 
   const plan = planRaw as "pro" | "lifetime";
+  const expectedProduct = appleExpectedProductId(plan, env);
+  if (productId !== expectedProduct) {
+    return json({ error: "Selected plan does not match product identifier." }, 400);
+  }
+
   const existing = await env.SNAPITID_KV.get(appleActivationKey(transactionId));
   if (existing) {
     const record = JSON.parse(existing) as AppleActivationRecord;
@@ -913,8 +1091,44 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
     }, 200);
   }
 
-  // NOTE: Transaction validation is enforced on-device via StoreKit 2.
-  // Production-hardening should also verify signed transactions server-side.
+  let verifiedTx: AppleTransactionPayload | null = null;
+  try {
+    verifiedTx = await fetchAppleTransactionPayload(transactionId, env);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Apple verification unavailable.";
+    return json({ error: message }, 503);
+  }
+  if (!verifiedTx) {
+    return json({ error: "Could not verify Apple transaction with App Store." }, 400);
+  }
+  if ((verifiedTx.transactionId || "") !== transactionId) {
+    return json({ error: "Apple transaction ID mismatch." }, 400);
+  }
+  if ((verifiedTx.productId || "") !== expectedProduct) {
+    return json({ error: "Apple product does not match requested plan." }, 400);
+  }
+  const expectedBundleId = (env.APPLE_IAP_BUNDLE_ID || "").trim();
+  if (expectedBundleId && (verifiedTx.bundleId || "") !== expectedBundleId) {
+    return json({ error: "Apple transaction bundle does not match this app." }, 400);
+  }
+  if (verifiedTx.revocationDate) {
+    return json({ error: "Apple transaction was revoked." }, 400);
+  }
+  if (plan === "pro" && verifiedTx.expiresDate) {
+    const expiresMs = Number(verifiedTx.expiresDate);
+    if (Number.isFinite(expiresMs) && expiresMs <= Date.now()) {
+      return json({ error: "Apple Pro subscription is expired." }, 400);
+    }
+  }
+
+  const verifiedOriginalId = (verifiedTx.originalTransactionId || originalTransactionId || "").trim();
+  if (verifiedOriginalId) {
+    const existingOriginalOwner = await env.SNAPITID_KV.get(appleOriginalActivationKey(verifiedOriginalId));
+    if (existingOriginalOwner && existingOriginalOwner !== authenticatedUser.id) {
+      return json({ error: "This Apple subscription is already linked to another account." }, 409);
+    }
+  }
+
   const user = (await getUserById(env, authenticatedUser.id)) || authenticatedUser;
   const now = new Date().toISOString();
   if (!(user.tier === "lifetime" && plan === "pro")) {
@@ -927,7 +1141,7 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
 
   const activation: AppleActivationRecord = {
     transactionId,
-    originalTransactionId: originalTransactionId || undefined,
+    originalTransactionId: verifiedOriginalId || undefined,
     userId: user.id,
     plan,
     activatedAt: now,
@@ -935,6 +1149,11 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
   await env.SNAPITID_KV.put(appleActivationKey(transactionId), JSON.stringify(activation), {
     expirationTtl: 60 * 60 * 24 * 365 * 5,
   });
+  if (verifiedOriginalId) {
+    await env.SNAPITID_KV.put(appleOriginalActivationKey(verifiedOriginalId), user.id, {
+      expirationTtl: 60 * 60 * 24 * 365 * 5,
+    });
+  }
 
   const secret = env.JWT_SECRET || "default_secret_change_in_production";
   const token = await generateJWT(user, secret);

@@ -78,6 +78,7 @@ final class PurchaseService: ObservableObject {
             let originalTransactionId = String(transaction.originalID)
             let session = try await SnapItIDAPI.shared.activateApplePlan(
                 plan: plan,
+                productId: product.id,
                 transactionId: transactionId,
                 originalTransactionId: originalTransactionId,
                 token: token
@@ -124,6 +125,7 @@ final class PurchaseService: ObservableObject {
 
         let session = try await SnapItIDAPI.shared.activateApplePlan(
             plan: highestTier,
+            productId: highestTier == .pro ? proProductId : lifetimeProductId,
             transactionId: tx,
             originalTransactionId: winningOriginalId,
             token: token

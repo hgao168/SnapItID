@@ -532,6 +532,9 @@ async function handleEnhance(request: Request, env: Env): Promise<Response> {
       : `Do NOT add any watermark, text, logo, brand mark, or overlay on the output image. `) +
     `Only remove any existing background and fill it with solid white. ` +
     `Optionally soften any harsh shadows on the white background area only. ` +
+    `FRAMING: Keep the head and shoulders centred in the frame and leave a clear margin of empty white space ABOVE the top of the head and hair — at least 10% of the image height. ` +
+    `Do NOT crop, cut off, or clip the top of the head, hair, ears, or chin. If the input photo has the head too close to the top edge, extend the white background upward to add the required headroom rather than cropping. ` +
+    `The full head from the top of the hair down to the upper chest must be visible inside the output, with comfortable padding on all sides. ` +
     `This is for a ${countryCode || 'international'} ${documentType.toLowerCase()} ID photo.`;
 
   const form = new FormData();

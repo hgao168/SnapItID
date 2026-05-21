@@ -12,6 +12,7 @@ struct AuthView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var name = ""
+    @State private var selectedRegistrationTier: UserTier = .free
     @State private var isWorking = false
     @State private var errorText: String?
     @StateObject private var purchases = PurchaseService.shared
@@ -39,6 +40,7 @@ struct AuthView: View {
                     VStack(spacing: 12) {
                         if mode == .register {
                             field("Name", text: $name, icon: "person.fill")
+                            registrationPlanSelector
                         }
                         field("Email", text: $email, icon: "envelope.fill",
                               keyboard: .emailAddress, autocap: false)
@@ -102,12 +104,67 @@ struct AuthView: View {
                 .foregroundStyle(.white)
             Text(mode == .login
                  ? "Sign in to unlock watermark-free photos."
-                 : "Free account · Upgrade for unwatermarked AI photos.")
+                 : "Choose Free, Pro monthly, or Lifetime during sign-up.")
                 .font(.system(size: 13))
                 .foregroundStyle(.white.opacity(0.55))
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 8)
+    }
+
+    private var registrationPlanSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "creditcard.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(snapAccent)
+                Text("Registration Plan")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+
+            HStack(spacing: 8) {
+                registrationTierButton(.free, subtitle: "$0")
+                registrationTierButton(.pro, subtitle: "$4.99 / month")
+                registrationTierButton(.lifetime, subtitle: "$24.99")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func registrationTierButton(_ tier: UserTier, subtitle: String) -> some View {
+        let selected = selectedRegistrationTier == tier
+        Button {
+            selectedRegistrationTier = tier
+        } label: {
+            VStack(spacing: 2) {
+                Text(tier.displayName)
+                    .font(.system(size: 12, weight: .bold))
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .medium))
+                    .opacity(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .foregroundStyle(selected ? .black.opacity(0.85) : .white.opacity(0.75))
+            .background(
+                Group {
+                    if selected {
+                        LinearGradient(colors: [snapAccent, snapAccent2],
+                                       startPoint: .leading,
+                                       endPoint: .trailing)
+                    } else {
+                        glassFill
+                    }
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(selected ? Color.clear : glassBorder, lineWidth: 1)
+            )
+        }
     }
 
     @ViewBuilder
@@ -335,6 +392,17 @@ struct AuthView: View {
                     try await auth.register(email: email.trimmingCharacters(in: .whitespaces),
                                             password: password,
                                             name: name.trimmingCharacters(in: .whitespaces))
+
+                    if selectedRegistrationTier != .free {
+                        billingMessage = "Account created. Completing \(selectedRegistrationTier.displayName) purchase…"
+                        await purchases.loadProducts()
+                        do {
+                            try await purchases.purchase(plan: selectedRegistrationTier, auth: auth)
+                            billingMessage = "You're now on the \(auth.tier.displayName) plan."
+                        } catch {
+                            throw APIError.encoding("Account created, but \(selectedRegistrationTier.displayName) purchase failed: \(error.localizedDescription)")
+                        }
+                    }
                 }
                 dismiss()
             } catch {

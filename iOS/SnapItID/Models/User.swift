@@ -9,7 +9,7 @@ enum UserTier: String, Codable {
     var displayName: String {
         switch self {
         case .free:     return "Free"
-        case .pro:      return "Premium"
+        case .pro:      return "Pro"
         case .lifetime: return "Lifetime"
         }
     }

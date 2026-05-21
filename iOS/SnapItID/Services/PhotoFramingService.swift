@@ -266,7 +266,27 @@ enum PhotoFramingService {
                 // Keep a small downward bias to preserve top spacing on tight crops.
                 let biasX = outW * 0.020
                 let biasY = outH * 0.045
-                image.draw(in: CGRect(x: t.dx + biasX, y: t.dy + biasY,
+                let scale = t.drawH / imgH
+                var drawX = t.dx + biasX
+                var drawY = t.dy + biasY
+
+                // Enforce minimum top headroom deterministically so the crown
+                // never appears clipped even if face detection is slightly tight.
+                let minTopHeadroom = outH * max(profile.topSpaceRatio, 0.10)
+                let headTopOut = headTop * scale + drawY
+                if headTopOut < minTopHeadroom {
+                    drawY += (minTopHeadroom - headTopOut)
+                }
+
+                // Keep bottom safe margin after headroom correction.
+                let minBottomMargin = outH * max(profile.bottomSpaceRatio, 0.08)
+                let maxHeadBottom = outH - minBottomMargin
+                let headBottomOut = headBottom * scale + drawY
+                if headBottomOut > maxHeadBottom {
+                    drawY -= (headBottomOut - maxHeadBottom)
+                }
+
+                image.draw(in: CGRect(x: drawX, y: drawY,
                                       width: t.drawW, height: t.drawH))
             } else {
                 // No face detected: contain-fit centered (same website fallback)

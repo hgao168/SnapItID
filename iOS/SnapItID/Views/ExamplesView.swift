@@ -24,14 +24,16 @@ struct ExamplesView: View {
                     tagColor: Color.white.opacity(0.15),
                     tagText: .white,
                     imageName: "before",
-                    caption: "Selfie. Glasses on. Cluttered background."
+                    caption: "Selfie. Glasses on. Cluttered background.",
+                    imageYOffset: 0
                 )
                 ExampleCard(
                     tag: "AFTER",
                     tagColor: snapAccent.opacity(0.3),
                     tagText: snapAccent,
                     imageName: "after",
-                    caption: "Glasses removed, pure-white background, 35×45 mm @ 300 DPI."
+                    caption: "Glasses removed, pure-white background, 35×45 mm @ 300 DPI.",
+                    imageYOffset: 8
                 )
             }
         }
@@ -45,6 +47,7 @@ private struct ExampleCard: View {
     let tagText: Color
     let imageName: String
     let caption: String
+    let imageYOffset: CGFloat
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -52,6 +55,7 @@ private struct ExampleCard: View {
                 Image(imageName)
                     .resizable()
                     .scaledToFill()
+                    .offset(y: imageYOffset)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
                             .fill(Color.clear)

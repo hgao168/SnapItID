@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Shared design tokens (glass theme)
 
@@ -110,8 +111,7 @@ struct ContentView: View {
                         photo: img,
                         photoSizeMm: photoSizeMm,
                         onGenerate: { sheet in
-                            shareImage = sheet
-                            showShareSheet = true
+                            presentPrintSheet(image: sheet)
                         }
                     )
                 }
@@ -215,7 +215,7 @@ struct ContentView: View {
                     } else {
                         Image(systemName: "sparkles").font(.system(size: 14, weight: .semibold))
                     }
-                    Text(viewModel.isEnhancing ? "Enhancing…" : "AI Enhance")
+                    Text(viewModel.isEnhancing ? "Enhancing…" : "Compliance Photo")
                         .font(.system(size: 14, weight: .bold))
                 }
                 .frame(maxWidth: .infinity).frame(height: 50)
@@ -235,7 +235,7 @@ struct ContentView: View {
                     } else {
                         Image(systemName: "checkmark.seal").font(.system(size: 14, weight: .semibold))
                     }
-                    Text(viewModel.isCheckingCompliance ? "Checking…" : "Check")
+                    Text(viewModel.isCheckingCompliance ? "Checking…" : "Compliance Check")
                         .font(.system(size: 14, weight: .bold))
                 }
                 .frame(maxWidth: .infinity).frame(height: 50)
@@ -351,6 +351,27 @@ struct ContentView: View {
 }
 
 #Preview { ContentView() }
+
+private func presentPrintSheet(image: UIImage) {
+    let controller = UIPrintInteractionController.shared
+    let info = UIPrintInfo(dictionary: nil)
+    info.outputType = .photo
+    info.jobName = "SnapItID Print Sheet"
+    controller.printInfo = info
+    controller.showsNumberOfCopies = true
+    controller.printingItem = image
+
+    guard let scene = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first,
+          let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+    else {
+        return
+    }
+
+    controller.present(animated: true, completionHandler: nil)
+    root.view.setNeedsLayout()
+}
 
 // MARK: - Print Options Sheet
 

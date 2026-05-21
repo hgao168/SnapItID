@@ -1,6 +1,9 @@
 # SnapItID Workers Configuration - Country Rules Worker
-# API token is read from CLOUDFLARE_API_TOKEN env variable - never commit secrets
+# API token is read from CLOUDFLARE_API_TOKEN env variable - never commit secrets.
 
+# NOTE: account_id should ideally be set via CLOUDFLARE_ACCOUNT_ID env var
+# or via `wrangler deploy --account-id <id>`. The API token must have minimal
+# permissions (Workers deployment only, NOT account-level admin).
 account_id = "bad51048dc7dc962fa272465081d5d2c"
 compatibility_date = "2024-12-01"
 name = "snapitid-rules"

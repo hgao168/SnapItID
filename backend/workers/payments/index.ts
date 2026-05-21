@@ -379,18 +379,88 @@ function escapeHtml(value: string): string {
 
 // ========== JWT & Password Hashing ==========
 
+// PBKDF2 parameters
+const PBKDF2_ITERATIONS = 100_000;
+const PBKDF2_KEY_LEN = 32; // 256 bits
+const SALT_LEN = 16; // 128 bits
+
 async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
   const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    PBKDF2_KEY_LEN * 8
+  );
+  const hashHex = Array.from(new Uint8Array(derived))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+  const saltHex = Array.from(salt)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `${saltHex}:${hashHex}`;
 }
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const computed = await hashPassword(password);
-  return computed === hash;
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  // Check if this is a legacy unsalted SHA-256 hash (no colon separator)
+  if (!stored.includes(":")) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hash = await crypto.subtle.digest("SHA-256", data);
+    const computed = Array.from(new Uint8Array(hash))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    return computed === stored;
+  }
+
+  // PBKDF2 salted hash: "saltHex:hashHex"
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex || saltHex.length !== SALT_LEN * 2 || hashHex.length !== PBKDF2_KEY_LEN * 2) {
+    return false;
+  }
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map((b) => parseInt(b, 16)));
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    PBKDF2_KEY_LEN * 8
+  );
+  const computed = Array.from(new Uint8Array(derived))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return computed === hashHex;
+}
+
+function getJWTSecret(env: Env): string {
+  const secret = env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not configured. Set via: wrangler secret put JWT_SECRET");
+  }
+  return secret;
 }
 
 function b64url(buf: ArrayBuffer): string {
@@ -418,10 +488,12 @@ async function hmacKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
 }
 
 function parsePemPrivateKey(pemRaw: string): ArrayBuffer {
+  // Parse PKCS#8 PEM private key for ECDSA P-256 signing.
+  // The key is provided via env.APPLE_IAP_PRIVATE_KEY (set with wrangler secret).
   const pem = pemRaw.replace(/\\n/g, "\n").trim();
   const base64 = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/-----BEGIN PRIVATE KEY-----/, "")
+    .replace(/-----END PRIVATE KEY-----/, "")
     .replace(/\s+/g, "");
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   return bytes.buffer;
@@ -648,7 +720,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 
   await saveUser(env, user);
 
-  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const secret = getJWTSecret(env);
   const token = await generateJWT(user, secret);
 
   return json(
@@ -688,7 +760,7 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     return json({ error: "Invalid email or password" }, 401);
   }
 
-  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const secret = getJWTSecret(env);
   const token = await generateJWT(user, secret);
 
   return json({
@@ -709,7 +781,7 @@ async function handleMe(request: Request, env: Env): Promise<Response> {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const secret = getJWTSecret(env);
   const payload = await verifyJWT(token, secret);
   if (!payload) {
     return json({ error: "Invalid token" }, 401);
@@ -735,7 +807,7 @@ async function getAuthenticatedUser(request: Request, env: Env): Promise<UserRec
   const token = extractToken(request);
   if (!token) return null;
 
-  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const secret = getJWTSecret(env);
   const payload = await verifyJWT(token, secret);
   if (!payload?.id) return null;
 
@@ -830,7 +902,7 @@ async function getAuthenticatedUser(request: Request, env: Env): Promise<UserRec
     await env.SNAPITID_KV.delete(`reset_token:${token}`);
 
     // Generate a new JWT token for auto-login after password reset
-    const secret = env.JWT_SECRET || "default_secret_change_in_production";
+    const secret = getJWTSecret(env);
     const jwtToken = await generateJWT(user, secret);
 
     return json({
@@ -1077,7 +1149,7 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
     }
 
     const currentUser = (await getUserById(env, authenticatedUser.id)) || authenticatedUser;
-    const secret = env.JWT_SECRET || "default_secret_change_in_production";
+    const secret = getJWTSecret(env);
     const token = await generateJWT(currentUser, secret);
     return json({
       success: true,
@@ -1155,7 +1227,7 @@ async function handleIOSActivate(request: Request, env: Env): Promise<Response> 
     });
   }
 
-  const secret = env.JWT_SECRET || "default_secret_change_in_production";
+  const secret = getJWTSecret(env);
   const token = await generateJWT(user, secret);
   return json(
     {

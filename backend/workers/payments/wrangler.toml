@@ -1,6 +1,9 @@
 # SnapItID Payments Worker Configuration
-# API token is read from CLOUDFLARE_API_TOKEN env variable - never commit secrets
+# API token is read from CLOUDFLARE_API_TOKEN env variable - never commit secrets.
 
+# NOTE: account_id should ideally be set via CLOUDFLARE_ACCOUNT_ID env var
+# or via `wrangler deploy --account-id <id>` rather than hardcoded here.
+# The API token must have minimal permissions (Workers deployment only, NOT account-level admin).
 account_id = "bad51048dc7dc962fa272465081d5d2c"
 compatibility_date = "2024-12-01"
 name = "snapitid-payments"
@@ -10,17 +13,26 @@ routes = [
   { pattern = "api.snapitid.ai/api/payments/*", zone_id = "c2ef57b04873856e2870a8fe0ef571c3" }
 ]
 
+# KV namespace ID — managed via Cloudflare dashboard / wrangler.toml.
+# This ID alone does NOT grant access; only CLOUDFLARE_API_TOKEN with proper scoping does.
+# For additional security, consider managing this via wrangler environments.
 [[kv_namespaces]]
 binding = "SNAPITID_KV"
 id = "b07b21c27d4c48acaf8332dfe2b9abbf"
 
 [vars]
 APP_BASE_URL = "https://snapitid.ai"
-STRIPE_PAYMENT_LINK_SINGLE = "https://buy.stripe.com/dRmcN4dFe3zidqe3W20x200"
-STRIPE_PAYMENT_LINK_PRO = "https://buy.stripe.com/7sY7sK7gQgm4ae25060x203"
-STRIPE_PAYMENT_LINK_LIFETIME = "https://buy.stripe.com/eVqfZg44E5Hq85UdwC0x202"
+
+# Stripe payment links moved to Wrangler secrets — configure via:
+#   wrangler secret put STRIPE_PAYMENT_LINK_SINGLE
+#   wrangler secret put STRIPE_PAYMENT_LINK_PRO
+#   wrangler secret put STRIPE_PAYMENT_LINK_LIFETIME
 
 # Configure these as Wrangler secrets, not plain vars:
 # wrangler secret put RESEND_API_KEY
 # wrangler secret put RESET_EMAIL_FROM
 # wrangler secret put RESET_EMAIL_REPLY_TO
+# wrangler secret put JWT_SECRET          (REQUIRED — generate 256-bit random key)
+# wrangler secret put STRIPE_SECRET_KEY
+# wrangler secret put STRIPE_WEBHOOK_SECRET
+# wrangler secret put APPLE_IAP_PRIVATE_KEY

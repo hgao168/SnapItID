@@ -258,12 +258,14 @@ enum PhotoFramingService {
                     headTop: headTop, headBottom: headBottom,
                     headLeft: headLeft, headRight: headRight,
                     profile: profile,
-                    fillOutput: true
+                    // Avoid forced cover-cropping on AI output; preserving full head
+                    // visibility is more important than filling every edge.
+                    fillOutput: false
                 )
 
                 // Keep a small downward bias to preserve top spacing on tight crops.
                 let biasX = outW * 0.020
-                let biasY = outH * 0.030
+                let biasY = outH * 0.045
                 image.draw(in: CGRect(x: t.dx + biasX, y: t.dy + biasY,
                                       width: t.drawW, height: t.drawH))
             } else {
